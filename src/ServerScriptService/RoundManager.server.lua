@@ -268,7 +268,7 @@ local function spawnKodoWave()
 		return
 	end
 
-	local shrine = workspace:FindFirstChild("ResurrectionShrine")
+	local shrine = (gameArea and gameArea:FindFirstChild("ResurrectionShrine")) or (gameArea and gameArea:FindFirstChild("RessurectionShrine")) or workspace:FindFirstChild("ResurrectionShrine")
 	local shrinePos = shrine and shrine.Position or Vector3.new(0, 0, 0)
 
 	-- Difficulty scaling

@@ -15,12 +15,24 @@ local shrineActive = true
 wait(2)
 local RoundManager = _G.RoundManager
 
--- Find the shrine in workspace
-local shrine = workspace:FindFirstChild("ResurrectionShrine")
+-- Find the shrine in workspace/GameArea
+local gameArea = workspace:FindFirstChild("GameArea")
+local shrine = nil
+
+if gameArea then
+	shrine = gameArea:FindFirstChild("ResurrectionShrine") or gameArea:FindFirstChild("RessurectionShrine")
+end
+
 if not shrine then
-	warn("ResurrectionShrine: No ResurrectionShrine found in workspace!")
+	shrine = workspace:FindFirstChild("ResurrectionShrine") or workspace:FindFirstChild("RessurectionShrine")
+end
+
+if not shrine then
+	warn("ResurrectionShrine: No ResurrectionShrine found in workspace or GameArea!")
 	return
 end
+
+print("ResurrectionShrine: Found shrine at", shrine:GetFullName())
 
 local shrinePosition = shrine.Position or shrine:GetPivot().Position
 
