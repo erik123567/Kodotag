@@ -1,0 +1,22 @@
+{
+  "name": "KodoTag",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/ServerScriptService"
+    },
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$path": "src/StarterGui"
+    },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$path": "src/ReplicatedStorage"
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "RojoScripts": { "$path": "src/ServerStorage" }
+    }
+  }
+}

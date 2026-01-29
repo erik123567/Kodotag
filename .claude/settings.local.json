@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd workshop requirement for higher-tier turrets\n\nSlowTurret, FrostTurret, PoisonTurret, and MultiShotTurret now\nrequire a completed workshop before players can build them.\nBasic turrets \\(Turret, FastTurret, CannonTurret\\) remain available\nwithout a workshop.\n\n- Server validates workshop ownership before allowing placement\n- Client shows locked status and requirements in build menu UI\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}
