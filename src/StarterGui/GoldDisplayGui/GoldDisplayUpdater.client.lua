@@ -45,8 +45,8 @@ end
 
 print("GoldDisplayUpdater: UI ready")
 
--- Always show gold display in game
-goldDisplay.Visible = true
+-- Hide the standalone gold display (gold is now shown in main game info panel)
+goldDisplay.Visible = false
 
 -- Set initial text
 goldText.Text = "Gold: 50"

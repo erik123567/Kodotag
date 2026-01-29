@@ -83,7 +83,7 @@ infoRow.Parent = gameInfoPanel
 
 local timerLabel = Instance.new("TextLabel")
 timerLabel.Name = "TimerLabel"
-timerLabel.Size = UDim2.new(0.33, 0, 1, 0)
+timerLabel.Size = UDim2.new(0.25, 0, 1, 0)
 timerLabel.Position = UDim2.new(0, 0, 0, 0)
 timerLabel.BackgroundTransparency = 1
 timerLabel.Text = "0:00"
@@ -94,8 +94,8 @@ timerLabel.Parent = infoRow
 
 local playersLabel = Instance.new("TextLabel")
 playersLabel.Name = "PlayersLabel"
-playersLabel.Size = UDim2.new(0.33, 0, 1, 0)
-playersLabel.Position = UDim2.new(0.33, 0, 0, 0)
+playersLabel.Size = UDim2.new(0.25, 0, 1, 0)
+playersLabel.Position = UDim2.new(0.25, 0, 0, 0)
 playersLabel.BackgroundTransparency = 1
 playersLabel.Text = "0/0"
 playersLabel.TextColor3 = Color3.new(0.3, 1, 0.3)
@@ -105,14 +105,25 @@ playersLabel.Parent = infoRow
 
 local kodosLabel = Instance.new("TextLabel")
 kodosLabel.Name = "KodosLabel"
-kodosLabel.Size = UDim2.new(0.33, 0, 1, 0)
-kodosLabel.Position = UDim2.new(0.66, 0, 0, 0)
+kodosLabel.Size = UDim2.new(0.25, 0, 1, 0)
+kodosLabel.Position = UDim2.new(0.5, 0, 0, 0)
 kodosLabel.BackgroundTransparency = 1
 kodosLabel.Text = "K:0"
 kodosLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
 kodosLabel.Font = Enum.Font.GothamBold
 kodosLabel.TextScaled = true
 kodosLabel.Parent = infoRow
+
+local goldLabel = Instance.new("TextLabel")
+goldLabel.Name = "GoldLabel"
+goldLabel.Size = UDim2.new(0.25, 0, 1, 0)
+goldLabel.Position = UDim2.new(0.75, 0, 0, 0)
+goldLabel.BackgroundTransparency = 1
+goldLabel.Text = "0g"
+goldLabel.TextColor3 = Color3.new(1, 0.84, 0)
+goldLabel.Font = Enum.Font.GothamBold
+goldLabel.TextScaled = true
+goldLabel.Parent = infoRow
 
 -- ============================================
 -- PLAYER STATS PANEL (Right Side)
@@ -336,6 +347,11 @@ if isReservedServer then
 	-- Listen for player stats updates
 	updatePlayerStats.OnClientEvent:Connect(function(playerStats)
 		updatePlayerStatsList(playerStats)
+
+		-- Update gold display
+		if playerStats[player.Name] then
+			goldLabel.Text = playerStats[player.Name].gold .. "g"
+		end
 	end)
 
 	-- Listen for notification events
