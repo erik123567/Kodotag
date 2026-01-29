@@ -29,7 +29,7 @@ local function setupCollisionGroups()
 end
 
 -- Create health bar
-local function createHealthBar(kodo)
+local function createHealthBar(kodo, isBoss)
 	local humanoid = kodo:FindFirstChild("Humanoid")
 	local rootPart = kodo:FindFirstChild("HumanoidRootPart")
 
@@ -37,24 +37,40 @@ local function createHealthBar(kodo)
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "HealthBar"
-	billboard.Size = UDim2.new(4, 0, 0.5, 0)
-	billboard.StudsOffset = Vector3.new(0, 8, 0)
+	billboard.Size = isBoss and UDim2.new(6, 0, 0.8, 0) or UDim2.new(4, 0, 0.5, 0)
+	billboard.StudsOffset = Vector3.new(0, isBoss and 12 or 8, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Adornee = rootPart
 	billboard.Parent = rootPart
 
+	-- Boss label
+	if isBoss then
+		local bossLabel = Instance.new("TextLabel")
+		bossLabel.Name = "BossLabel"
+		bossLabel.Size = UDim2.new(1, 0, 0.6, 0)
+		bossLabel.Position = UDim2.new(0, 0, -0.7, 0)
+		bossLabel.BackgroundTransparency = 1
+		bossLabel.Text = "BOSS"
+		bossLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
+		bossLabel.TextScaled = true
+		bossLabel.Font = Enum.Font.GothamBlack
+		bossLabel.TextStrokeTransparency = 0
+		bossLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+		bossLabel.Parent = billboard
+	end
+
 	local background = Instance.new("Frame")
 	background.Name = "Background"
 	background.Size = UDim2.new(1, 0, 1, 0)
-	background.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-	background.BorderSizePixel = 2
-	background.BorderColor3 = Color3.new(0, 0, 0)
+	background.BackgroundColor3 = isBoss and Color3.new(0.3, 0, 0) or Color3.new(0.2, 0.2, 0.2)
+	background.BorderSizePixel = isBoss and 3 or 2
+	background.BorderColor3 = isBoss and Color3.new(1, 0.8, 0) or Color3.new(0, 0, 0)
 	background.Parent = billboard
 
 	local healthBar = Instance.new("Frame")
 	healthBar.Name = "HealthBar"
 	healthBar.Size = UDim2.new(1, 0, 1, 0)
-	healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+	healthBar.BackgroundColor3 = isBoss and Color3.new(1, 0.3, 0) or Color3.new(0, 1, 0)
 	healthBar.BorderSizePixel = 0
 	healthBar.Parent = background
 
@@ -74,17 +90,26 @@ local function createHealthBar(kodo)
 		healthBar.Size = UDim2.new(healthPercent, 0, 1, 0)
 		healthText.Text = math.floor(health) .. " / " .. humanoid.MaxHealth
 
-		if healthPercent > 0.6 then
-			healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
-		elseif healthPercent > 0.3 then
-			healthBar.BackgroundColor3 = Color3.new(1, 1, 0)
+		if isBoss then
+			-- Boss uses orange/red gradient
+			if healthPercent > 0.5 then
+				healthBar.BackgroundColor3 = Color3.new(1, 0.3, 0)
+			else
+				healthBar.BackgroundColor3 = Color3.new(0.8, 0, 0)
+			end
 		else
-			healthBar.BackgroundColor3 = Color3.new(1, 0, 0)
+			if healthPercent > 0.6 then
+				healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+			elseif healthPercent > 0.3 then
+				healthBar.BackgroundColor3 = Color3.new(1, 1, 0)
+			else
+				healthBar.BackgroundColor3 = Color3.new(1, 0, 0)
+			end
 		end
 	end)
 end
 
-function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed)
+function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth, customDamage, isBoss)
 	setupCollisionGroups()
 
 	local kodo = kodoTemplate:Clone()
@@ -99,6 +124,11 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed)
 	if humanoid then
 		humanoid.WalkSpeed = customSpeed or BASE_MOVE_SPEED
 
+		-- Set custom health
+		local health = customHealth or 100
+		humanoid.MaxHealth = health
+		humanoid.Health = health
+
 		-- Connect Died event IMMEDIATELY after creating Kodo
 		humanoid.Died:Connect(function()
 			print("KodoAI: Humanoid.Died event fired for", kodo.Name)
@@ -106,6 +136,32 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed)
 		end)
 
 		print("KodoAI: Connected Died event for", kodo.Name)
+	end
+
+	-- Store custom damage for attackStructure
+	local damageValue = Instance.new("NumberValue")
+	damageValue.Name = "StructureDamage"
+	damageValue.Value = customDamage or STRUCTURE_ATTACK_DAMAGE
+	damageValue.Parent = kodo
+
+	-- Boss visuals
+	if isBoss then
+		local bossTag = Instance.new("BoolValue")
+		bossTag.Name = "IsBoss"
+		bossTag.Value = true
+		bossTag.Parent = kodo
+
+		for _, part in ipairs(kodo:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Size = part.Size * 1.5
+				part.Color = Color3.fromRGB(139, 0, 0)
+			end
+		end
+
+		-- Adjust position after scaling
+		if rootPart then
+			rootPart.CFrame = CFrame.new(spawnPosition + Vector3.new(0, 8, 0))
+		end
 	end
 
 	for _, part in ipairs(kodo:GetDescendants()) do
@@ -116,7 +172,7 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed)
 		end
 	end
 
-	createHealthBar(kodo)
+	createHealthBar(kodo, isBoss)
 	KodoAI.runAI(kodo)
 
 	return kodo
@@ -224,7 +280,7 @@ local function findBlockingStructure(position)
 end
 
 -- Attack structure
-local function attackStructure(structure)
+local function attackStructure(kodo, structure)
 	local structureHealth = structure:FindFirstChild("Health")
 	if not structureHealth then
 		structureHealth = Instance.new("IntValue")
@@ -233,7 +289,11 @@ local function attackStructure(structure)
 		structureHealth.Parent = structure
 	end
 
-	structureHealth.Value = structureHealth.Value - STRUCTURE_ATTACK_DAMAGE
+	-- Get custom damage from kodo, fallback to default
+	local damageValue = kodo and kodo:FindFirstChild("StructureDamage")
+	local damage = damageValue and damageValue.Value or STRUCTURE_ATTACK_DAMAGE
+
+	structureHealth.Value = structureHealth.Value - damage
 
 	if structureHealth.Value <= 0 then
 		structure:Destroy()
@@ -316,7 +376,7 @@ function KodoAI.runAI(kodo)
 						local nearestStructure = findBlockingStructure(rootPart.Position)
 						if nearestStructure then
 							if tick() - lastAttackTime >= STRUCTURE_ATTACK_COOLDOWN then
-								local destroyed = attackStructure(nearestStructure)
+								local destroyed = attackStructure(kodo, nearestStructure)
 								lastAttackTime = tick()
 								if destroyed then
 									lastMoveTime = tick()
@@ -363,7 +423,7 @@ function KodoAI.runAI(kodo)
 									local nearestStructure = findBlockingStructure(rootPart.Position)
 									if nearestStructure then
 										if tick() - lastAttackTime >= STRUCTURE_ATTACK_COOLDOWN then
-											attackStructure(nearestStructure)
+											attackStructure(kodo, nearestStructure)
 											lastAttackTime = tick()
 										end
 									else

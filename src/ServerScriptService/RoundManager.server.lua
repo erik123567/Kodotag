@@ -16,7 +16,20 @@ local KODOS_PER_WAVE = 1
 local WAVE_INTERVAL = 30
 local KODO_SPEED_INCREASE = 2
 local INITIAL_KODO_SPEED = 16
-local GOLD_PER_KODO_KILL = 10  -- NEW: Gold reward for killing Kodos
+local GOLD_PER_KODO_KILL = 10  -- Gold reward for killing Kodos
+
+-- Difficulty Scaling
+local KODO_HEALTH_BASE = 100
+local KODO_HEALTH_PER_WAVE = 15
+local KODO_DAMAGE_BASE = 25
+local KODO_DAMAGE_PER_WAVE = 5
+
+-- Boss Settings
+local BOSS_WAVE_INTERVAL = 5
+local BOSS_HEALTH_MULTIPLIER = 5
+local BOSS_SIZE_MULTIPLIER = 1.5
+local BOSS_GOLD_REWARD = 100
+local BOSS_COLOR = Color3.fromRGB(139, 0, 0)
 
 -- References
 local gameArea = workspace:FindFirstChild("GameArea")
@@ -89,6 +102,7 @@ end
 function RoundManager.broadcastGameState()
 	local data = {
 		round = currentRound,
+		wave = currentWave,
 		alive = #alivePlayers,
 		dead = #deadPlayers,
 		time = roundTime
@@ -256,12 +270,61 @@ local function spawnKodoWave()
 	local shrine = workspace:FindFirstChild("ResurrectionShrine")
 	local shrinePos = shrine and shrine.Position or Vector3.new(0, 0, 0)
 
-	local kodoCount = INITIAL_KODOS + (currentWave - 1) * KODOS_PER_WAVE
+	-- Difficulty scaling
+	local kodoCount = math.floor(INITIAL_KODOS + (currentWave - 1) * KODOS_PER_WAVE + currentWave * 0.3)
 	local kodoSpeed = INITIAL_KODO_SPEED + (currentWave - 1) * KODO_SPEED_INCREASE
+	local kodoHealth = KODO_HEALTH_BASE + (currentWave - 1) * KODO_HEALTH_PER_WAVE
+	local kodoDamage = KODO_DAMAGE_BASE + (currentWave - 1) * KODO_DAMAGE_PER_WAVE
+	local isBossWave = (currentWave % BOSS_WAVE_INTERVAL == 0)
 
-	print("Spawning wave " .. currentWave .. " with " .. kodoCount .. " Kodos at speed " .. kodoSpeed)
+	print("Spawning wave " .. currentWave .. " with " .. kodoCount .. " Kodos (HP:" .. kodoHealth .. " DMG:" .. kodoDamage .. " Speed:" .. kodoSpeed .. ")")
 	showNotification:FireAllClients("Wave " .. currentWave .. " incoming!", Color3.new(1, 0.5, 0))
 
+	-- Helper function to connect kodo death event
+	local function connectKodoDeath(kodo, isBoss)
+		local humanoid = kodo:FindFirstChild("Humanoid")
+		if humanoid then
+			humanoid.Died:Connect(function()
+				print("=== ROUNDMANAGER: " .. (isBoss and "BOSS " or "") .. "KODO DIED ===")
+
+				-- Remove from active Kodos list
+				for j, k in ipairs(activeKodos) do
+					if k == kodo then
+						table.remove(activeKodos, j)
+						print("RoundManager: Removed Kodo from active list. Remaining:", #activeKodos)
+						break
+					end
+				end
+
+				-- Award gold to ALL players
+				for _, player in ipairs(Players:GetPlayers()) do
+					RoundManager.initPlayerStats(player)
+
+					-- Base gold + Bounty Hunter bonus + Boss bonus
+					local goldReward = GOLD_PER_KODO_KILL
+					if isBoss then
+						goldReward = goldReward + BOSS_GOLD_REWARD
+					end
+					if _G.UpgradeManager then
+						local bountyBonus = _G.UpgradeManager.getUpgradeEffect(player.Name, "BountyHunter")
+						goldReward = goldReward + bountyBonus
+					end
+
+					playerStats[player.Name].gold = playerStats[player.Name].gold + goldReward
+					playerStats[player.Name].kodoKills = playerStats[player.Name].kodoKills + 1
+					print("RoundManager: Awarded", goldReward, "gold to", player.Name)
+				end
+
+				if isBoss then
+					showNotification:FireAllClients("BOSS DEFEATED! +" .. BOSS_GOLD_REWARD .. " bonus gold!", Color3.new(0, 1, 0))
+				end
+
+				RoundManager.broadcastPlayerStats()
+			end)
+		end
+	end
+
+	-- Spawn regular kodos
 	for i = 1, kodoCount do
 		if not gameActive then
 			break
@@ -282,53 +345,47 @@ local function spawnKodoWave()
 		end
 
 		if kodoSpawn then
-			local kodo = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, kodoSpeed)
+			local kodo = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, kodoSpeed, kodoHealth, kodoDamage, false)
 
 			if kodo then
 				table.insert(activeKodos, kodo)
+				connectKodoDeath(kodo, false)
+				print("RoundManager: Spawned Kodo #" .. i)
+			end
+		end
+	end
 
-				-- CRITICAL: Connect gold reward when Kodo dies
-				local humanoid = kodo:FindFirstChild("Humanoid")
-				if humanoid then
-					humanoid.Died:Connect(function()
-						print("=== ROUNDMANAGER: KODO DIED ===")
+	-- Spawn boss on milestone waves
+	if isBossWave then
+		local bossHealth = kodoHealth * BOSS_HEALTH_MULTIPLIER
+		local bossDamage = kodoDamage * 2
+		local bossSpeed = kodoSpeed * 0.8  -- Slightly slower
 
-						-- Remove from active Kodos list
-						for j, k in ipairs(activeKodos) do
-							if k == kodo then
-								table.remove(activeKodos, j)
-								print("RoundManager: Removed Kodo from active list. Remaining:", #activeKodos)
-								break
-							end
-						end
+		showNotification:FireAllClients("BOSS KODO INCOMING!", Color3.new(1, 0, 0))
 
-						-- Award gold to ALL players (not just alive ones)
-						for _, player in ipairs(Players:GetPlayers()) do
-							RoundManager.initPlayerStats(player)
+		local kodoSpawn = getRandomKodoSpawn()
+		if kodoSpawn then
+			-- Avoid shrine
+			local attempts = 0
+			while shrine and (kodoSpawn.Position - shrinePos).Magnitude < 30 and attempts < 10 do
+				kodoSpawn = getRandomKodoSpawn()
+				if not kodoSpawn then break end
+				attempts = attempts + 1
+			end
 
-							-- Base gold + Bounty Hunter bonus
-							local goldReward = GOLD_PER_KODO_KILL
-							if _G.UpgradeManager then
-								local bountyBonus = _G.UpgradeManager.getUpgradeEffect(player.Name, "BountyHunter")
-								goldReward = goldReward + bountyBonus
-							end
+			if kodoSpawn then
+				local boss = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, bossSpeed, bossHealth, bossDamage, true)
 
-							playerStats[player.Name].gold = playerStats[player.Name].gold + goldReward
-							playerStats[player.Name].kodoKills = playerStats[player.Name].kodoKills + 1
-							print("RoundManager: Awarded", goldReward, "gold to", player.Name, "- New total:", playerStats[player.Name].gold)
-						end
-
-						RoundManager.broadcastPlayerStats()
-					end)
-					print("RoundManager: Connected Died event for Kodo #" .. i)
-				else
-					warn("RoundManager: Kodo has no Humanoid!")
+				if boss then
+					table.insert(activeKodos, boss)
+					connectKodoDeath(boss, true)
+					print("RoundManager: Spawned BOSS KODO with", bossHealth, "HP")
 				end
 			end
 		end
 	end
 
-	print("Spawned " .. #activeKodos .. " Kodos")
+	print("Spawned " .. #activeKodos .. " Kodos total")
 end
 
 -- End the round

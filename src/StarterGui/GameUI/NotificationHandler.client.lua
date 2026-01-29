@@ -31,6 +31,36 @@ if not notificationText then
 	notificationText.Parent = screenGui
 end
 
+-- Create prominent wave display (center-top) - ONLY FOR GAME SERVERS
+local waveDisplay = Instance.new("Frame")
+waveDisplay.Name = "WaveDisplay"
+waveDisplay.Size = UDim2.new(0.15, 0, 0.06, 0)
+waveDisplay.Position = UDim2.new(0.425, 0, 0.02, 0)
+waveDisplay.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+waveDisplay.BackgroundTransparency = 0.2
+waveDisplay.BorderSizePixel = 0
+waveDisplay.Visible = isReservedServer
+waveDisplay.Parent = screenGui
+
+local waveCorner = Instance.new("UICorner")
+waveCorner.CornerRadius = UDim.new(0, 10)
+waveCorner.Parent = waveDisplay
+
+local waveStroke = Instance.new("UIStroke")
+waveStroke.Color = Color3.new(1, 0.5, 0)
+waveStroke.Thickness = 2
+waveStroke.Parent = waveDisplay
+
+local waveLabel = Instance.new("TextLabel")
+waveLabel.Name = "WaveLabel"
+waveLabel.Size = UDim2.new(1, 0, 1, 0)
+waveLabel.BackgroundTransparency = 1
+waveLabel.Text = "WAVE 1"
+waveLabel.TextColor3 = Color3.new(1, 0.7, 0.2)
+waveLabel.Font = Enum.Font.GothamBlack
+waveLabel.TextScaled = true
+waveLabel.Parent = waveDisplay
+
 -- Create main stats panel (top left) - ONLY FOR GAME SERVERS
 local statsFrame = Instance.new("Frame")
 statsFrame.Name = "StatsFrame"
@@ -107,7 +137,7 @@ statsTitle.Name = "StatsTitle"
 statsTitle.Size = UDim2.new(1, 0, 0.1, 0)
 statsTitle.Position = UDim2.new(0, 0, 0, 0)
 statsTitle.BackgroundTransparency = 1
-statsTitle.Text = "PLAYER STATS"
+statsTitle.Text = "KILL LEADERBOARD"
 statsTitle.TextColor3 = Color3.new(1, 1, 1)
 statsTitle.Font = Enum.Font.GothamBold
 statsTitle.TextScaled = true
@@ -130,26 +160,50 @@ local function formatTime(seconds)
 	return string.format("%d:%02d", minutes, secs)
 end
 
--- Function to update player stats list
+-- Function to update player stats list (sorted by kills as leaderboard)
 local function updatePlayerStatsList(playerStats)
 	-- Clear existing
 	for _, child in ipairs(playerListScroll:GetChildren()) do
 		child:Destroy()
 	end
 
-	local yOffset = 0
+	-- Convert to array and sort by kills (descending)
+	local sortedPlayers = {}
 	for playerName, stats in pairs(playerStats) do
+		table.insert(sortedPlayers, {name = playerName, stats = stats})
+	end
+	table.sort(sortedPlayers, function(a, b)
+		return a.stats.kodoKills > b.stats.kodoKills
+	end)
+
+	local yOffset = 0
+	for rank, playerData in ipairs(sortedPlayers) do
+		local playerName = playerData.name
+		local stats = playerData.stats
+
 		local playerFrame = Instance.new("Frame")
-		playerFrame.Size = UDim2.new(1, -10, 0, 60)
+		playerFrame.Size = UDim2.new(1, -10, 0, 55)
 		playerFrame.Position = UDim2.new(0, 5, 0, yOffset)
-		playerFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+		playerFrame.BackgroundColor3 = rank == 1 and Color3.new(0.3, 0.25, 0.05) or Color3.new(0.1, 0.1, 0.1)
 		playerFrame.BackgroundTransparency = 0.5
 		playerFrame.BorderSizePixel = 0
 		playerFrame.Parent = playerListScroll
 
+		-- Rank indicator
+		local rankLabel = Instance.new("TextLabel")
+		rankLabel.Size = UDim2.new(0.15, 0, 0.55, 0)
+		rankLabel.Position = UDim2.new(0, 0, 0, 0)
+		rankLabel.BackgroundTransparency = 1
+		rankLabel.Text = "#" .. rank
+		rankLabel.TextColor3 = rank == 1 and Color3.new(1, 0.84, 0) or Color3.new(0.7, 0.7, 0.7)
+		rankLabel.Font = Enum.Font.GothamBold
+		rankLabel.TextScaled = true
+		rankLabel.Parent = playerFrame
+
+		-- Player name
 		local nameLabel = Instance.new("TextLabel")
-		nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
-		nameLabel.Position = UDim2.new(0, 0, 0, 0)
+		nameLabel.Size = UDim2.new(0.5, 0, 0.55, 0)
+		nameLabel.Position = UDim2.new(0.15, 0, 0, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.Text = playerName
 		nameLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -158,40 +212,31 @@ local function updatePlayerStatsList(playerStats)
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 		nameLabel.Parent = playerFrame
 
-		local deathsLabel = Instance.new("TextLabel")
-		deathsLabel.Size = UDim2.new(1, 0, 0.23, 0)
-		deathsLabel.Position = UDim2.new(0, 0, 0.33, 0)
-		deathsLabel.BackgroundTransparency = 1
-		deathsLabel.Text = "Deaths: " .. stats.deaths
-		deathsLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
-		deathsLabel.Font = Enum.Font.Gotham
-		deathsLabel.TextScaled = true
-		deathsLabel.TextXAlignment = Enum.TextXAlignment.Left
-		deathsLabel.Parent = playerFrame
-
-		local savesLabel = Instance.new("TextLabel")
-		savesLabel.Size = UDim2.new(0.5, 0, 0.23, 0)
-		savesLabel.Position = UDim2.new(0, 0, 0.56, 0)
-		savesLabel.BackgroundTransparency = 1
-		savesLabel.Text = "Saves: " .. stats.saves
-		savesLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
-		savesLabel.Font = Enum.Font.Gotham
-		savesLabel.TextScaled = true
-		savesLabel.TextXAlignment = Enum.TextXAlignment.Left
-		savesLabel.Parent = playerFrame
-
+		-- Kill count (prominent)
 		local killsLabel = Instance.new("TextLabel")
-		killsLabel.Size = UDim2.new(0.5, 0, 0.23, 0)
-		killsLabel.Position = UDim2.new(0.5, 0, 0.56, 0)
+		killsLabel.Size = UDim2.new(0.35, 0, 0.55, 0)
+		killsLabel.Position = UDim2.new(0.65, 0, 0, 0)
 		killsLabel.BackgroundTransparency = 1
-		killsLabel.Text = "Kills: " .. stats.kodoKills
+		killsLabel.Text = stats.kodoKills .. " kills"
 		killsLabel.TextColor3 = Color3.new(1, 1, 0.5)
-		killsLabel.Font = Enum.Font.Gotham
+		killsLabel.Font = Enum.Font.GothamBold
 		killsLabel.TextScaled = true
-		killsLabel.TextXAlignment = Enum.TextXAlignment.Left
+		killsLabel.TextXAlignment = Enum.TextXAlignment.Right
 		killsLabel.Parent = playerFrame
 
-		yOffset = yOffset + 65
+		-- Deaths/Saves row
+		local statsRow = Instance.new("TextLabel")
+		statsRow.Size = UDim2.new(0.85, 0, 0.4, 0)
+		statsRow.Position = UDim2.new(0.15, 0, 0.55, 0)
+		statsRow.BackgroundTransparency = 1
+		statsRow.Text = "Deaths: " .. stats.deaths .. "  |  Saves: " .. stats.saves
+		statsRow.TextColor3 = Color3.new(0.6, 0.6, 0.6)
+		statsRow.Font = Enum.Font.Gotham
+		statsRow.TextScaled = true
+		statsRow.TextXAlignment = Enum.TextXAlignment.Left
+		statsRow.Parent = playerFrame
+
+		yOffset = yOffset + 60
 	end
 
 	playerListScroll.CanvasSize = UDim2.new(0, 0, 0, yOffset)
@@ -219,6 +264,11 @@ if isReservedServer then
 		aliveLabel.Text = "Alive: " .. data.alive
 		deadLabel.Text = "Dead: " .. data.dead
 		timerLabel.Text = "Time: " .. formatTime(data.time)
+
+		-- Update prominent wave display
+		if data.wave then
+			waveLabel.Text = "WAVE " .. data.wave
+		end
 	end)
 
 	-- Listen for player stats updates
