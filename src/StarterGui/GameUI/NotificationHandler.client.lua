@@ -40,16 +40,16 @@ end
 
 -- ============================================
 -- GAME INFO PANEL (Top Center)
--- Shows: Wave, Round, Timer, Alive/Dead, Kodos
+-- Shows: Wave, Timer, Alive/Dead, Kodos, Gold
 -- ============================================
 local gameInfoPanel = Instance.new("Frame")
 gameInfoPanel.Name = "GameInfoPanel"
-gameInfoPanel.Size = UDim2.new(0.25, 0, 0.1, 0)
-gameInfoPanel.Position = UDim2.new(0.375, 0, 0.01, 0)
+gameInfoPanel.Size = UDim2.new(0.25, 0, 0.08, 0)
+gameInfoPanel.Position = UDim2.new(0.375, 0, 0, 0)
 gameInfoPanel.BackgroundColor3 = Color3.new(0.1, 0.1, 0.12)
 gameInfoPanel.BackgroundTransparency = 0.2
 gameInfoPanel.BorderSizePixel = 0
-gameInfoPanel.Visible = isReservedServer
+gameInfoPanel.Visible = false -- Hidden until round starts
 gameInfoPanel.Parent = screenGui
 
 local gameInfoCorner = Instance.new("UICorner")
@@ -132,11 +132,11 @@ goldLabel.Parent = infoRow
 local playerStatsFrame = Instance.new("Frame")
 playerStatsFrame.Name = "PlayerStatsFrame"
 playerStatsFrame.Size = UDim2.new(0.22, 0, 0.5, 0)
-playerStatsFrame.Position = UDim2.new(0.77, 0, 0.12, 0)
+playerStatsFrame.Position = UDim2.new(0.77, 0, 0.02, 0)
 playerStatsFrame.BackgroundColor3 = Color3.new(0.08, 0.08, 0.1)
 playerStatsFrame.BackgroundTransparency = 0.2
 playerStatsFrame.BorderSizePixel = 0
-playerStatsFrame.Visible = isReservedServer
+playerStatsFrame.Visible = false -- Hidden until round starts
 playerStatsFrame.Parent = screenGui
 
 local statsCorner = Instance.new("UICorner")
@@ -330,6 +330,11 @@ if isReservedServer then
 
 	-- Listen for game state updates
 	updateGameState.OnClientEvent:Connect(function(data)
+		-- Show UI only when round is active (players are in game)
+		local roundActive = (data.alive + data.dead) > 0
+		gameInfoPanel.Visible = roundActive
+		playerStatsFrame.Visible = roundActive
+
 		-- Update wave display
 		if data.wave then
 			waveLabel.Text = "WAVE " .. data.wave
