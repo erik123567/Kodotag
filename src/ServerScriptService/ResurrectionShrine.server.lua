@@ -67,10 +67,15 @@ local shrineIndicator = createShrineIndicator()
 local function updateIndicator()
 	if not shrineIndicator then return end
 
+	local deadCount = 0
+	if RoundManager and RoundManager.deadPlayers then
+		deadCount = #RoundManager.deadPlayers
+	end
+
 	if not shrineActive then
 		shrineIndicator.Color = Color3.new(0.5, 0.5, 0.5)
 		shrineIndicator.Transparency = 0.9
-	elseif RoundManager and #RoundManager.deadPlayers > 0 then
+	elseif deadCount > 0 then
 		-- Dead players exist - shrine glows green
 		shrineIndicator.Color = Color3.new(0, 1, 0.5)
 		shrineIndicator.Transparency = 0.7
