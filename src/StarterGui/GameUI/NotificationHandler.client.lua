@@ -154,124 +154,86 @@ playerListScroll.BorderSizePixel = 0
 playerListScroll.ScrollBarThickness = 6
 playerListScroll.Parent = playerStatsFrame
 
--- Create hidable dropdown stats panel (bottom-center) - ONLY FOR GAME SERVERS
-local dropdownOpen = false
+-- Create quick stats panel (top-right, below leaderboard) - ONLY FOR GAME SERVERS
 local currentKodoKills = 0
 local currentWaveNum = 1
 local currentKodosRemaining = 0
 
-local dropdownContainer = Instance.new("Frame")
-dropdownContainer.Name = "DropdownStats"
-dropdownContainer.Size = UDim2.new(0.2, 0, 0.04, 0)
-dropdownContainer.Position = UDim2.new(0.4, 0, 0.94, 0)
-dropdownContainer.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
-dropdownContainer.BackgroundTransparency = 0.2
-dropdownContainer.BorderSizePixel = 0
-dropdownContainer.Visible = isReservedServer
-dropdownContainer.Parent = screenGui
+local quickStatsPanel = Instance.new("Frame")
+quickStatsPanel.Name = "QuickStats"
+quickStatsPanel.Size = UDim2.new(0.18, 0, 0.12, 0)
+quickStatsPanel.Position = UDim2.new(0.80, 0, 0.63, 0)
+quickStatsPanel.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
+quickStatsPanel.BackgroundTransparency = 0.2
+quickStatsPanel.BorderSizePixel = 0
+quickStatsPanel.Visible = isReservedServer
+quickStatsPanel.Parent = screenGui
 
-local dropdownCorner = Instance.new("UICorner")
-dropdownCorner.CornerRadius = UDim.new(0, 8)
-dropdownCorner.Parent = dropdownContainer
+local quickStatsCorner = Instance.new("UICorner")
+quickStatsCorner.CornerRadius = UDim.new(0, 8)
+quickStatsCorner.Parent = quickStatsPanel
 
-local dropdownStroke = Instance.new("UIStroke")
-dropdownStroke.Color = Color3.new(0.4, 0.4, 0.5)
-dropdownStroke.Thickness = 1
-dropdownStroke.Parent = dropdownContainer
+local quickStatsStroke = Instance.new("UIStroke")
+quickStatsStroke.Color = Color3.new(0.5, 0.5, 0.6)
+quickStatsStroke.Thickness = 2
+quickStatsStroke.Parent = quickStatsPanel
 
--- Toggle button/header
-local dropdownHeader = Instance.new("TextButton")
-dropdownHeader.Name = "Header"
-dropdownHeader.Size = UDim2.new(1, 0, 1, 0)
-dropdownHeader.BackgroundTransparency = 1
-dropdownHeader.Text = "Stats [L]"
-dropdownHeader.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-dropdownHeader.Font = Enum.Font.GothamBold
-dropdownHeader.TextScaled = true
-dropdownHeader.Parent = dropdownContainer
-
--- Dropdown content panel (hidden by default)
-local dropdownContent = Instance.new("Frame")
-dropdownContent.Name = "Content"
-dropdownContent.Size = UDim2.new(1, 0, 0, 90)
-dropdownContent.Position = UDim2.new(0, 0, 0, -90)
-dropdownContent.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
-dropdownContent.BackgroundTransparency = 0.1
-dropdownContent.BorderSizePixel = 0
-dropdownContent.Visible = false
-dropdownContent.Parent = dropdownContainer
-
-local contentCorner = Instance.new("UICorner")
-contentCorner.CornerRadius = UDim.new(0, 8)
-contentCorner.Parent = dropdownContent
-
-local contentStroke = Instance.new("UIStroke")
-contentStroke.Color = Color3.new(0.4, 0.4, 0.5)
-contentStroke.Thickness = 1
-contentStroke.Parent = dropdownContent
+-- Title
+local quickStatsTitle = Instance.new("TextLabel")
+quickStatsTitle.Name = "Title"
+quickStatsTitle.Size = UDim2.new(1, 0, 0.3, 0)
+quickStatsTitle.Position = UDim2.new(0, 0, 0, 0)
+quickStatsTitle.BackgroundTransparency = 1
+quickStatsTitle.Text = "YOUR STATS"
+quickStatsTitle.TextColor3 = Color3.new(1, 1, 1)
+quickStatsTitle.Font = Enum.Font.GothamBold
+quickStatsTitle.TextScaled = true
+quickStatsTitle.Parent = quickStatsPanel
 
 -- Wave/Level label
-local dropdownWaveLabel = Instance.new("TextLabel")
-dropdownWaveLabel.Name = "WaveLabel"
-dropdownWaveLabel.Size = UDim2.new(1, -10, 0.33, 0)
-dropdownWaveLabel.Position = UDim2.new(0, 5, 0, 0)
-dropdownWaveLabel.BackgroundTransparency = 1
-dropdownWaveLabel.Text = "Wave: 1"
-dropdownWaveLabel.TextColor3 = Color3.new(1, 0.7, 0.2)
-dropdownWaveLabel.Font = Enum.Font.GothamBold
-dropdownWaveLabel.TextScaled = true
-dropdownWaveLabel.TextXAlignment = Enum.TextXAlignment.Left
-dropdownWaveLabel.Parent = dropdownContent
+local quickWaveLabel = Instance.new("TextLabel")
+quickWaveLabel.Name = "WaveLabel"
+quickWaveLabel.Size = UDim2.new(1, -10, 0.23, 0)
+quickWaveLabel.Position = UDim2.new(0, 5, 0.3, 0)
+quickWaveLabel.BackgroundTransparency = 1
+quickWaveLabel.Text = "Wave: 1"
+quickWaveLabel.TextColor3 = Color3.new(1, 0.7, 0.2)
+quickWaveLabel.Font = Enum.Font.GothamBold
+quickWaveLabel.TextScaled = true
+quickWaveLabel.TextXAlignment = Enum.TextXAlignment.Left
+quickWaveLabel.Parent = quickStatsPanel
 
 -- Your kills label
-local dropdownKillsLabel = Instance.new("TextLabel")
-dropdownKillsLabel.Name = "KillsLabel"
-dropdownKillsLabel.Size = UDim2.new(1, -10, 0.33, 0)
-dropdownKillsLabel.Position = UDim2.new(0, 5, 0.33, 0)
-dropdownKillsLabel.BackgroundTransparency = 1
-dropdownKillsLabel.Text = "Your Kills: 0"
-dropdownKillsLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
-dropdownKillsLabel.Font = Enum.Font.GothamBold
-dropdownKillsLabel.TextScaled = true
-dropdownKillsLabel.TextXAlignment = Enum.TextXAlignment.Left
-dropdownKillsLabel.Parent = dropdownContent
+local quickKillsLabel = Instance.new("TextLabel")
+quickKillsLabel.Name = "KillsLabel"
+quickKillsLabel.Size = UDim2.new(1, -10, 0.23, 0)
+quickKillsLabel.Position = UDim2.new(0, 5, 0.53, 0)
+quickKillsLabel.BackgroundTransparency = 1
+quickKillsLabel.Text = "Your Kills: 0"
+quickKillsLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
+quickKillsLabel.Font = Enum.Font.GothamBold
+quickKillsLabel.TextScaled = true
+quickKillsLabel.TextXAlignment = Enum.TextXAlignment.Left
+quickKillsLabel.Parent = quickStatsPanel
 
 -- Kodos remaining label
-local dropdownKodosLabel = Instance.new("TextLabel")
-dropdownKodosLabel.Name = "KodosLabel"
-dropdownKodosLabel.Size = UDim2.new(1, -10, 0.33, 0)
-dropdownKodosLabel.Position = UDim2.new(0, 5, 0.66, 0)
-dropdownKodosLabel.BackgroundTransparency = 1
-dropdownKodosLabel.Text = "Kodos Remaining: 0"
-dropdownKodosLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
-dropdownKodosLabel.Font = Enum.Font.GothamBold
-dropdownKodosLabel.TextScaled = true
-dropdownKodosLabel.TextXAlignment = Enum.TextXAlignment.Left
-dropdownKodosLabel.Parent = dropdownContent
+local quickKodosLabel = Instance.new("TextLabel")
+quickKodosLabel.Name = "KodosLabel"
+quickKodosLabel.Size = UDim2.new(1, -10, 0.23, 0)
+quickKodosLabel.Position = UDim2.new(0, 5, 0.76, 0)
+quickKodosLabel.BackgroundTransparency = 1
+quickKodosLabel.Text = "Kodos Remaining: 0"
+quickKodosLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
+quickKodosLabel.Font = Enum.Font.GothamBold
+quickKodosLabel.TextScaled = true
+quickKodosLabel.TextXAlignment = Enum.TextXAlignment.Left
+quickKodosLabel.Parent = quickStatsPanel
 
--- Toggle function
-local function toggleDropdown()
-	dropdownOpen = not dropdownOpen
-	dropdownContent.Visible = dropdownOpen
-	dropdownHeader.Text = dropdownOpen and "Stats [L] ^" or "Stats [L]"
-end
-
--- Click to toggle
-dropdownHeader.MouseButton1Click:Connect(toggleDropdown)
-
--- L key to toggle
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.L then
-		toggleDropdown()
-	end
-end)
-
--- Function to update dropdown stats
-local function updateDropdownStats()
-	dropdownWaveLabel.Text = "Wave: " .. currentWaveNum
-	dropdownKillsLabel.Text = "Your Kills: " .. currentKodoKills
-	dropdownKodosLabel.Text = "Kodos Remaining: " .. currentKodosRemaining
+-- Function to update quick stats
+local function updateQuickStats()
+	quickWaveLabel.Text = "Wave: " .. currentWaveNum
+	quickKillsLabel.Text = "Your Kills: " .. currentKodoKills
+	quickKodosLabel.Text = "Kodos Remaining: " .. currentKodosRemaining
 end
 
 -- Function to format time
@@ -397,7 +359,7 @@ if isReservedServer then
 			currentKodosRemaining = data.kodosRemaining
 		end
 
-		updateDropdownStats()
+		updateQuickStats()
 	end)
 
 	-- Listen for player stats updates
@@ -407,7 +369,7 @@ if isReservedServer then
 		-- Update player's own kills for dropdown
 		if playerStats[player.Name] then
 			currentKodoKills = playerStats[player.Name].kodoKills
-			updateDropdownStats()
+			updateQuickStats()
 		end
 	end)
 
