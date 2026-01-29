@@ -83,7 +83,16 @@ end
 
 -- Check if player is alive
 local function isPlayerAlive(player)
-	if not RoundManager or not RoundManager.alivePlayers then return false end
+	-- In Studio testing, if RoundManager isn't running, consider player alive if they have a character
+	if not RoundManager or not RoundManager.alivePlayers then
+		return player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0
+	end
+
+	-- If alivePlayers list is empty but player has character, they're alive (Studio solo test)
+	if #RoundManager.alivePlayers == 0 then
+		return player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0
+	end
+
 	for _, p in ipairs(RoundManager.alivePlayers) do
 		if p == player then
 			return true
@@ -220,15 +229,23 @@ end
 
 -- Main detection loop
 task.spawn(function()
+	local lastDebugTime = 0
+
 	while true do
 		wait(0.5)
 
 		-- Update indicator
 		updateIndicator()
 
+		-- Debug output every 5 seconds
+		if tick() - lastDebugTime > 5 then
+			lastDebugTime = tick()
+			local deadCount = RoundManager and RoundManager.deadPlayers and #RoundManager.deadPlayers or 0
+			print("ResurrectionShrine: Active:", shrineActive, "Dead players:", deadCount)
+		end
+
 		-- Only check if shrine is active
 		if not shrineActive then continue end
-		if not RoundManager then continue end
 
 		-- Check for alive players near shrine
 		for _, player in ipairs(Players:GetPlayers()) do
@@ -237,6 +254,7 @@ task.spawn(function()
 				if humanoidRootPart then
 					local distance = (humanoidRootPart.Position - shrinePosition).Magnitude
 					if distance <= SHRINE_RADIUS then
+						print("ResurrectionShrine:", player.Name, "entered shrine zone! Distance:", distance)
 						-- Player is in shrine zone - attempt resurrection
 						resurrectDeadPlayers(player)
 						break
