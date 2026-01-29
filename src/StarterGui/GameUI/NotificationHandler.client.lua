@@ -184,7 +184,7 @@ local dropdownHeader = Instance.new("TextButton")
 dropdownHeader.Name = "Header"
 dropdownHeader.Size = UDim2.new(1, 0, 1, 0)
 dropdownHeader.BackgroundTransparency = 1
-dropdownHeader.Text = "Stats [Tab]"
+dropdownHeader.Text = "Stats [L]"
 dropdownHeader.TextColor3 = Color3.new(0.8, 0.8, 0.8)
 dropdownHeader.Font = Enum.Font.GothamBold
 dropdownHeader.TextScaled = true
@@ -253,16 +253,16 @@ dropdownKodosLabel.Parent = dropdownContent
 local function toggleDropdown()
 	dropdownOpen = not dropdownOpen
 	dropdownContent.Visible = dropdownOpen
-	dropdownHeader.Text = dropdownOpen and "Stats [Tab] ^" or "Stats [Tab]"
+	dropdownHeader.Text = dropdownOpen and "Stats [L] ^" or "Stats [L]"
 end
 
 -- Click to toggle
 dropdownHeader.MouseButton1Click:Connect(toggleDropdown)
 
--- Tab key to toggle
+-- L key to toggle
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.Tab then
+	if input.KeyCode == Enum.KeyCode.L then
 		toggleDropdown()
 	end
 end)
