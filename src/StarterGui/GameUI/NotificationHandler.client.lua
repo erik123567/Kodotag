@@ -81,21 +81,10 @@ infoRow.Position = UDim2.new(0, 5, 0.5, 0)
 infoRow.BackgroundTransparency = 1
 infoRow.Parent = gameInfoPanel
 
-local roundLabel = Instance.new("TextLabel")
-roundLabel.Name = "RoundLabel"
-roundLabel.Size = UDim2.new(0.25, 0, 1, 0)
-roundLabel.Position = UDim2.new(0, 0, 0, 0)
-roundLabel.BackgroundTransparency = 1
-roundLabel.Text = "R1"
-roundLabel.TextColor3 = Color3.new(1, 1, 1)
-roundLabel.Font = Enum.Font.GothamBold
-roundLabel.TextScaled = true
-roundLabel.Parent = infoRow
-
 local timerLabel = Instance.new("TextLabel")
 timerLabel.Name = "TimerLabel"
-timerLabel.Size = UDim2.new(0.25, 0, 1, 0)
-timerLabel.Position = UDim2.new(0.25, 0, 0, 0)
+timerLabel.Size = UDim2.new(0.33, 0, 1, 0)
+timerLabel.Position = UDim2.new(0, 0, 0, 0)
 timerLabel.BackgroundTransparency = 1
 timerLabel.Text = "0:00"
 timerLabel.TextColor3 = Color3.new(1, 1, 0)
@@ -105,8 +94,8 @@ timerLabel.Parent = infoRow
 
 local playersLabel = Instance.new("TextLabel")
 playersLabel.Name = "PlayersLabel"
-playersLabel.Size = UDim2.new(0.25, 0, 1, 0)
-playersLabel.Position = UDim2.new(0.5, 0, 0, 0)
+playersLabel.Size = UDim2.new(0.33, 0, 1, 0)
+playersLabel.Position = UDim2.new(0.33, 0, 0, 0)
 playersLabel.BackgroundTransparency = 1
 playersLabel.Text = "0/0"
 playersLabel.TextColor3 = Color3.new(0.3, 1, 0.3)
@@ -116,8 +105,8 @@ playersLabel.Parent = infoRow
 
 local kodosLabel = Instance.new("TextLabel")
 kodosLabel.Name = "KodosLabel"
-kodosLabel.Size = UDim2.new(0.25, 0, 1, 0)
-kodosLabel.Position = UDim2.new(0.75, 0, 0, 0)
+kodosLabel.Size = UDim2.new(0.33, 0, 1, 0)
+kodosLabel.Position = UDim2.new(0.66, 0, 0, 0)
 kodosLabel.BackgroundTransparency = 1
 kodosLabel.Text = "K:0"
 kodosLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
@@ -336,7 +325,6 @@ if isReservedServer then
 		end
 
 		-- Update info row
-		roundLabel.Text = "R" .. data.round
 		timerLabel.Text = formatTime(data.time)
 		playersLabel.Text = data.alive .. "/" .. (data.alive + data.dead)
 
