@@ -6,7 +6,10 @@ local player = Players.LocalPlayer
 local screenGui = script.Parent
 
 -- Check if this is a game server or lobby server
-local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
+-- For testing: show UI in Studio as well
+local RunService = game:GetService("RunService")
+local isStudio = RunService:IsStudio()
+local isReservedServer = isStudio or (game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0)
 
 -- Clear existing UI except notifications and rules
 for _, child in ipairs(screenGui:GetChildren()) do
