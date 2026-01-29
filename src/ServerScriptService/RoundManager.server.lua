@@ -105,7 +105,8 @@ function RoundManager.broadcastGameState()
 		wave = currentWave,
 		alive = #alivePlayers,
 		dead = #deadPlayers,
-		time = roundTime
+		time = roundTime,
+		kodosRemaining = #activeKodos
 	}
 	updateGameState:FireAllClients(data)
 end

@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local screenGui = script.Parent
@@ -153,6 +154,126 @@ playerListScroll.BorderSizePixel = 0
 playerListScroll.ScrollBarThickness = 6
 playerListScroll.Parent = playerStatsFrame
 
+-- Create hidable dropdown stats panel (bottom-center) - ONLY FOR GAME SERVERS
+local dropdownOpen = false
+local currentKodoKills = 0
+local currentWaveNum = 1
+local currentKodosRemaining = 0
+
+local dropdownContainer = Instance.new("Frame")
+dropdownContainer.Name = "DropdownStats"
+dropdownContainer.Size = UDim2.new(0.2, 0, 0.04, 0)
+dropdownContainer.Position = UDim2.new(0.4, 0, 0.94, 0)
+dropdownContainer.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
+dropdownContainer.BackgroundTransparency = 0.2
+dropdownContainer.BorderSizePixel = 0
+dropdownContainer.Visible = isReservedServer
+dropdownContainer.Parent = screenGui
+
+local dropdownCorner = Instance.new("UICorner")
+dropdownCorner.CornerRadius = UDim.new(0, 8)
+dropdownCorner.Parent = dropdownContainer
+
+local dropdownStroke = Instance.new("UIStroke")
+dropdownStroke.Color = Color3.new(0.4, 0.4, 0.5)
+dropdownStroke.Thickness = 1
+dropdownStroke.Parent = dropdownContainer
+
+-- Toggle button/header
+local dropdownHeader = Instance.new("TextButton")
+dropdownHeader.Name = "Header"
+dropdownHeader.Size = UDim2.new(1, 0, 1, 0)
+dropdownHeader.BackgroundTransparency = 1
+dropdownHeader.Text = "Stats [Tab]"
+dropdownHeader.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+dropdownHeader.Font = Enum.Font.GothamBold
+dropdownHeader.TextScaled = true
+dropdownHeader.Parent = dropdownContainer
+
+-- Dropdown content panel (hidden by default)
+local dropdownContent = Instance.new("Frame")
+dropdownContent.Name = "Content"
+dropdownContent.Size = UDim2.new(1, 0, 0, 90)
+dropdownContent.Position = UDim2.new(0, 0, 0, -90)
+dropdownContent.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
+dropdownContent.BackgroundTransparency = 0.1
+dropdownContent.BorderSizePixel = 0
+dropdownContent.Visible = false
+dropdownContent.Parent = dropdownContainer
+
+local contentCorner = Instance.new("UICorner")
+contentCorner.CornerRadius = UDim.new(0, 8)
+contentCorner.Parent = dropdownContent
+
+local contentStroke = Instance.new("UIStroke")
+contentStroke.Color = Color3.new(0.4, 0.4, 0.5)
+contentStroke.Thickness = 1
+contentStroke.Parent = dropdownContent
+
+-- Wave/Level label
+local dropdownWaveLabel = Instance.new("TextLabel")
+dropdownWaveLabel.Name = "WaveLabel"
+dropdownWaveLabel.Size = UDim2.new(1, -10, 0.33, 0)
+dropdownWaveLabel.Position = UDim2.new(0, 5, 0, 0)
+dropdownWaveLabel.BackgroundTransparency = 1
+dropdownWaveLabel.Text = "Wave: 1"
+dropdownWaveLabel.TextColor3 = Color3.new(1, 0.7, 0.2)
+dropdownWaveLabel.Font = Enum.Font.GothamBold
+dropdownWaveLabel.TextScaled = true
+dropdownWaveLabel.TextXAlignment = Enum.TextXAlignment.Left
+dropdownWaveLabel.Parent = dropdownContent
+
+-- Your kills label
+local dropdownKillsLabel = Instance.new("TextLabel")
+dropdownKillsLabel.Name = "KillsLabel"
+dropdownKillsLabel.Size = UDim2.new(1, -10, 0.33, 0)
+dropdownKillsLabel.Position = UDim2.new(0, 5, 0.33, 0)
+dropdownKillsLabel.BackgroundTransparency = 1
+dropdownKillsLabel.Text = "Your Kills: 0"
+dropdownKillsLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
+dropdownKillsLabel.Font = Enum.Font.GothamBold
+dropdownKillsLabel.TextScaled = true
+dropdownKillsLabel.TextXAlignment = Enum.TextXAlignment.Left
+dropdownKillsLabel.Parent = dropdownContent
+
+-- Kodos remaining label
+local dropdownKodosLabel = Instance.new("TextLabel")
+dropdownKodosLabel.Name = "KodosLabel"
+dropdownKodosLabel.Size = UDim2.new(1, -10, 0.33, 0)
+dropdownKodosLabel.Position = UDim2.new(0, 5, 0.66, 0)
+dropdownKodosLabel.BackgroundTransparency = 1
+dropdownKodosLabel.Text = "Kodos Remaining: 0"
+dropdownKodosLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
+dropdownKodosLabel.Font = Enum.Font.GothamBold
+dropdownKodosLabel.TextScaled = true
+dropdownKodosLabel.TextXAlignment = Enum.TextXAlignment.Left
+dropdownKodosLabel.Parent = dropdownContent
+
+-- Toggle function
+local function toggleDropdown()
+	dropdownOpen = not dropdownOpen
+	dropdownContent.Visible = dropdownOpen
+	dropdownHeader.Text = dropdownOpen and "Stats [Tab] ^" or "Stats [Tab]"
+end
+
+-- Click to toggle
+dropdownHeader.MouseButton1Click:Connect(toggleDropdown)
+
+-- Tab key to toggle
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.Tab then
+		toggleDropdown()
+	end
+end)
+
+-- Function to update dropdown stats
+local function updateDropdownStats()
+	dropdownWaveLabel.Text = "Wave: " .. currentWaveNum
+	dropdownKillsLabel.Text = "Your Kills: " .. currentKodoKills
+	dropdownKodosLabel.Text = "Kodos Remaining: " .. currentKodosRemaining
+end
+
 -- Function to format time
 local function formatTime(seconds)
 	local minutes = math.floor(seconds / 60)
@@ -268,12 +389,26 @@ if isReservedServer then
 		-- Update prominent wave display
 		if data.wave then
 			waveLabel.Text = "WAVE " .. data.wave
+			currentWaveNum = data.wave
 		end
+
+		-- Update kodos remaining
+		if data.kodosRemaining then
+			currentKodosRemaining = data.kodosRemaining
+		end
+
+		updateDropdownStats()
 	end)
 
 	-- Listen for player stats updates
 	updatePlayerStats.OnClientEvent:Connect(function(playerStats)
 		updatePlayerStatsList(playerStats)
+
+		-- Update player's own kills for dropdown
+		if playerStats[player.Name] then
+			currentKodoKills = playerStats[player.Name].kodoKills
+			updateDropdownStats()
+		end
 	end)
 
 	-- Listen for notification events
