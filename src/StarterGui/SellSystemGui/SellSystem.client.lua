@@ -3,6 +3,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
+-- Check if this is a game server (set by GameInitializer)
+local isGameServerValue = ReplicatedStorage:WaitForChild("IsGameServer", 10)
+if not isGameServerValue or not isGameServerValue.Value then
+	print("SellSystem: Lobby - disabled")
+	return
+end
+
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera

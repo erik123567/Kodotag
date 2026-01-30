@@ -1,14 +1,14 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local screenGui = script.Parent
 
--- Check if this is a game server or lobby server
--- For testing: show UI in Studio as well
-local RunService = game:GetService("RunService")
+-- Check if this is a game server (set by GameInitializer)
 local isStudio = RunService:IsStudio()
-local isReservedServer = isStudio or (game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0)
+local isGameServerValue = ReplicatedStorage:WaitForChild("IsGameServer", 10)
+local isReservedServer = isStudio or (isGameServerValue and isGameServerValue.Value)
 
 -- Clear existing UI except notifications and rules
 for _, child in ipairs(screenGui:GetChildren()) do
@@ -368,6 +368,107 @@ if isReservedServer then
 		wait(3)
 		notificationText.Visible = false
 	end)
+
+	-- Listen for game over event
+	local showGameOver = ReplicatedStorage:WaitForChild("ShowGameOver", 10)
+	if showGameOver then
+		showGameOver.OnClientEvent:Connect(function(data)
+			print("Game Over received - showing results screen")
+
+			-- Hide game UI
+			gameInfoPanel.Visible = false
+			playerStatsFrame.Visible = false
+
+			-- Create game over screen
+			local gameOverScreen = Instance.new("Frame")
+			gameOverScreen.Name = "GameOverScreen"
+			gameOverScreen.Size = UDim2.new(0.5, 0, 0.6, 0)
+			gameOverScreen.Position = UDim2.new(0.25, 0, 0.2, 0)
+			gameOverScreen.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
+			gameOverScreen.BackgroundTransparency = 0.1
+			gameOverScreen.BorderSizePixel = 0
+			gameOverScreen.Parent = screenGui
+
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 12)
+			corner.Parent = gameOverScreen
+
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.new(1, 0.3, 0.3)
+			stroke.Thickness = 3
+			stroke.Parent = gameOverScreen
+
+			-- Title
+			local titleLabel = Instance.new("TextLabel")
+			titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
+			titleLabel.Position = UDim2.new(0, 0, 0.02, 0)
+			titleLabel.BackgroundTransparency = 1
+			titleLabel.Text = "GAME OVER"
+			titleLabel.TextColor3 = Color3.new(1, 0.3, 0.3)
+			titleLabel.Font = Enum.Font.GothamBlack
+			titleLabel.TextScaled = true
+			titleLabel.Parent = gameOverScreen
+
+			-- Waves reached
+			local wavesLabel = Instance.new("TextLabel")
+			wavesLabel.Size = UDim2.new(1, 0, 0.12, 0)
+			wavesLabel.Position = UDim2.new(0, 0, 0.18, 0)
+			wavesLabel.BackgroundTransparency = 1
+			wavesLabel.Text = "Survived " .. (data.wavesReached or 1) .. " Waves"
+			wavesLabel.TextColor3 = Color3.new(1, 1, 0.5)
+			wavesLabel.Font = Enum.Font.GothamBold
+			wavesLabel.TextScaled = true
+			wavesLabel.Parent = gameOverScreen
+
+			-- Stats section
+			local myStats = data.playerStats and data.playerStats[player.Name]
+			if myStats then
+				local statsLabel = Instance.new("TextLabel")
+				statsLabel.Size = UDim2.new(0.8, 0, 0.35, 0)
+				statsLabel.Position = UDim2.new(0.1, 0, 0.32, 0)
+				statsLabel.BackgroundColor3 = Color3.new(0.15, 0.15, 0.2)
+				statsLabel.BackgroundTransparency = 0.5
+				statsLabel.Text = "YOUR STATS\n\n" ..
+					"Kodo Kills: " .. (myStats.kodoKills or 0) .. "\n" ..
+					"Deaths: " .. (myStats.deaths or 0) .. "\n" ..
+					"Gold Earned: " .. (myStats.goldEarned or 0) .. "g"
+				statsLabel.TextColor3 = Color3.new(1, 1, 1)
+				statsLabel.Font = Enum.Font.Gotham
+				statsLabel.TextScaled = true
+				statsLabel.Parent = gameOverScreen
+
+				local statsCorner = Instance.new("UICorner")
+				statsCorner.CornerRadius = UDim.new(0, 8)
+				statsCorner.Parent = statsLabel
+			end
+
+			-- Return countdown
+			local countdownLabel = Instance.new("TextLabel")
+			countdownLabel.Name = "CountdownLabel"
+			countdownLabel.Size = UDim2.new(1, 0, 0.1, 0)
+			countdownLabel.Position = UDim2.new(0, 0, 0.85, 0)
+			countdownLabel.BackgroundTransparency = 1
+			countdownLabel.Text = "Returning to lobby in " .. (data.returnDelay or 10) .. "..."
+			countdownLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+			countdownLabel.Font = Enum.Font.Gotham
+			countdownLabel.TextScaled = true
+			countdownLabel.Parent = gameOverScreen
+
+			-- Countdown timer
+			local returnDelay = data.returnDelay or 10
+			task.spawn(function()
+				for i = returnDelay, 1, -1 do
+					if countdownLabel and countdownLabel.Parent then
+						countdownLabel.Text = "Returning to lobby in " .. i .. "..."
+					end
+					task.wait(1)
+				end
+				if countdownLabel and countdownLabel.Parent then
+					countdownLabel.Text = "Teleporting..."
+				end
+			end)
+		end)
+	end
 
 	print("HUD loaded successfully!")
 else

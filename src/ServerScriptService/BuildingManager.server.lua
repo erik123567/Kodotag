@@ -2,6 +2,13 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
+-- Only run on game servers (reserved servers)
+local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
+if not isReservedServer then
+	print("BuildingManager: Lobby server - disabled")
+	return
+end
+
 print("BuildingManager: Starting...")
 
 -- Wait for RoundManager

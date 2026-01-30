@@ -1,6 +1,13 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+-- Check if this is a game server (set by GameInitializer)
+local isGameServerValue = ReplicatedStorage:WaitForChild("IsGameServer", 10)
+if not isGameServerValue or not isGameServerValue.Value then
+	print("GoldDisplayUpdater: Lobby - disabled")
+	return
+end
+
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 

@@ -1,7 +1,23 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
 
 local RoundManager = {}
+
+-- Settings for return to lobby
+local RETURN_TO_LOBBY_DELAY = 10 -- Seconds to show results before teleporting
+
+-- Check if this is a reserved (game) server
+local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
+
+-- Only run RoundManager on reserved game servers
+if not isReservedServer then
+	print("RoundManager: This is the LOBBY server - game logic disabled")
+	_G.RoundManager = RoundManager
+	return RoundManager
+end
+
+print("RoundManager: This is a GAME server - initializing game logic")
 
 -- Disable auto-respawn
 Players.CharacterAutoLoads = false
@@ -72,6 +88,53 @@ updatePlayerStats.Parent = ReplicatedStorage
 local showNotification = Instance.new("RemoteEvent")
 showNotification.Name = "ShowNotification"
 showNotification.Parent = ReplicatedStorage
+
+local showGameOver = Instance.new("RemoteEvent")
+showGameOver.Name = "ShowGameOver"
+showGameOver.Parent = ReplicatedStorage
+
+-- Return all players to lobby
+local function returnToLobby()
+	print("Returning all players to lobby in " .. RETURN_TO_LOBBY_DELAY .. " seconds...")
+
+	-- Collect final stats for each player
+	local finalStats = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		local stats = playerStats[player.Name] or {deaths = 0, saves = 0, kodoKills = 0, gold = 0}
+		finalStats[player.Name] = {
+			wavesReached = currentWave,
+			deaths = stats.deaths,
+			kodoKills = stats.kodoKills,
+			goldEarned = stats.gold
+		}
+	end
+
+	-- Send game over screen to all clients
+	showGameOver:FireAllClients({
+		wavesReached = currentWave,
+		playerStats = finalStats,
+		returnDelay = RETURN_TO_LOBBY_DELAY
+	})
+
+	-- Wait before teleporting
+	task.wait(RETURN_TO_LOBBY_DELAY)
+
+	-- Teleport all players back to lobby (main place)
+	local playerList = Players:GetPlayers()
+	if #playerList > 0 then
+		print("Teleporting " .. #playerList .. " players back to lobby...")
+
+		for _, player in ipairs(playerList) do
+			local success, err = pcall(function()
+				TeleportService:Teleport(game.PlaceId, player)
+			end)
+
+			if not success then
+				warn("Failed to teleport " .. player.Name .. ": " .. tostring(err))
+			end
+		end
+	end
+end
 
 -- Helper functions
 local function getRandomSpawn()
@@ -259,6 +322,11 @@ function handlePlayerDeath(player)
 		print("All players dead - Game Over!")
 		showNotification:FireAllClients("All players eliminated! Survived " .. currentWave .. " waves!", Color3.new(1, 0, 0))
 		endRound()
+
+		-- Return all players to lobby
+		task.spawn(function()
+			returnToLobby()
+		end)
 	end
 end
 
@@ -529,11 +597,29 @@ Players.PlayerAdded:Connect(function(player)
 	RoundManager.broadcastPlayerStats()
 end)
 
-print("RoundManager loaded - starting game loop")
+print("RoundManager loaded - waiting for players to arrive...")
 
 -- Start the game loop in a separate thread
 local function startGameLoop()
-	wait(3)
+	-- Wait for GameInitializer to signal that players are ready
+	print("RoundManager: Waiting for players to teleport in...")
+
+	while not _G.GameConfig or not _G.GameConfig.playersReady do
+		wait(0.5)
+	end
+
+	-- Get game configuration
+	local gameConfig = _G.GameConfig
+	print("RoundManager: Game starting!")
+	print("  - Pad Type: " .. (gameConfig.padType or "UNKNOWN"))
+	print("  - Difficulty: " .. (gameConfig.difficulty or "NORMAL"))
+	print("  - Expected Players: " .. (gameConfig.expectedPlayers or 1))
+
+	-- Brief delay for players to load
+	wait(2)
+
+	-- Notify players
+	showNotification:FireAllClients("Game mode: " .. (gameConfig.padType or "SOLO"), Color3.new(0, 1, 1))
 
 	while true do
 		-- Intermission
@@ -547,7 +633,8 @@ local function startGameLoop()
 		print("Player count: " .. #playerList)
 
 		if #playerList < 1 then
-			print("Not enough players. Waiting...")
+			print("No players remaining. Ending game server...")
+			-- Could add logic here to shut down the server
 			wait(5)
 			continue
 		end

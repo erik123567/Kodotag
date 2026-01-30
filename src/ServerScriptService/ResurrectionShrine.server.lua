@@ -1,6 +1,13 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+-- Only run on game servers (reserved servers)
+local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
+if not isReservedServer then
+	print("ResurrectionShrine: Lobby server - disabled")
+	return
+end
+
 print("ResurrectionShrine: Starting...")
 
 -- Settings

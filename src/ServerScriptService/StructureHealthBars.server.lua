@@ -1,5 +1,12 @@
 local workspace = game:GetService("Workspace")
 
+-- Only run on game servers (reserved servers)
+local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
+if not isReservedServer then
+	print("StructureHealthBars: Lobby server - disabled")
+	return
+end
+
 -- Create health bar for a structure
 local function createHealthBar(structure)
 	print("StructureHealthBars: Attempting to create health bar for", structure.Name)
