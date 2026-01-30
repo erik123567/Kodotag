@@ -104,6 +104,7 @@ local function returnToLobby()
 		finalStats[player.Name] = {
 			wavesReached = currentWave,
 			deaths = stats.deaths,
+			saves = stats.saves,
 			kodoKills = stats.kodoKills,
 			goldEarned = stats.gold
 		}

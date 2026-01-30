@@ -431,6 +431,7 @@ if isReservedServer then
 				statsLabel.Text = "YOUR STATS\n\n" ..
 					"Kodo Kills: " .. (myStats.kodoKills or 0) .. "\n" ..
 					"Deaths: " .. (myStats.deaths or 0) .. "\n" ..
+					"Saves: " .. (myStats.saves or 0) .. "\n" ..
 					"Gold Earned: " .. (myStats.goldEarned or 0) .. "g"
 				statsLabel.TextColor3 = Color3.new(1, 1, 1)
 				statsLabel.Font = Enum.Font.Gotham
