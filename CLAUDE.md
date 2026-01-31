@@ -164,6 +164,18 @@ Multiple income sources with different risk/reward profiles:
 
 Strategic importance: Mines are placed between player spawns and the dangerous outer areas, creating risk/reward decisions.
 
+### Bonus Veins
+Random small gold veins that spawn around the map, creating opportunistic moments:
+
+- **30-50 gold** per vein (random)
+- Spawn every **35 seconds** at random locations
+- Despawn after **18 seconds** if not collected
+- Shown as **pulsing bright gold circles** on minimap (faster pulse than fixed mines)
+- UI notification when a vein spawns nearby
+- Does NOT respawn - one-time collection
+
+Adds dynamic "split-second decision" gameplay: "A vein just spawned near those Kodos... do I risk it?"
+
 **Spawn Rates**: Normal kodos decrease over time, special types appear progressively (Armored/Swift from wave 4+, Frostborn/Venomous from wave 6+, Horde from wave 8+).
 
 ### Turret Types

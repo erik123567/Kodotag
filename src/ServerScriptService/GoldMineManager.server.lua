@@ -15,11 +15,19 @@ end
 
 print("GoldMineManager: Starting...")
 
--- Settings
+-- Settings for Fixed Mines
 local MINE_RESOURCE = 300  -- Total gold in each mine
 local MINE_RESPAWN_TIME = 45  -- Seconds before depleted mine respawns
 local MINING_RANGE = 12  -- How close player must be to mine
 local MINE_HEIGHT = 3  -- Height above ground
+
+-- Settings for Random Bonus Veins
+local VEIN_MIN_GOLD = 30
+local VEIN_MAX_GOLD = 50
+local VEIN_SPAWN_INTERVAL = 35  -- Seconds between vein spawns
+local VEIN_LIFESPAN = 18  -- Seconds before vein despawns
+local VEIN_SPAWN_RADIUS = 60  -- How far from center veins can spawn
+local VEIN_MIN_DISTANCE_FROM_SPAWNS = 25  -- Minimum distance from player spawns
 
 -- Fixed mine positions (strategic locations around the map)
 -- These create a diamond pattern around the center, encouraging map control
@@ -364,28 +372,46 @@ mineGoldEvent.OnServerEvent:Connect(function(player, mine, mineAmount)
 
 	-- Check if depleted
 	if resource.Value <= 0 then
-		local mineName = mine:FindFirstChild("MineName")
-		local name = mineName and mineName.Value or "Unknown"
+		local isBonusVein = mine:FindFirstChild("IsBonusVein")
 
-		print("GoldMineManager:", name, "depleted by", player.Name)
+		if isBonusVein and isBonusVein.Value then
+			-- Bonus vein - just destroy, no respawn
+			print("GoldMineManager: Bonus vein collected by", player.Name)
 
-		-- Store info before destroying
-		local mineInfo = nil
-		for n, info in pairs(activeMines) do
-			if info.mine == mine then
-				mineInfo = info
-				break
+			-- Remove from tracking
+			for i, v in ipairs(activeVeins) do
+				if v == mine then
+					table.remove(activeVeins, i)
+					break
+				end
 			end
-		end
 
-		-- Destroy old mine
-		mine:Destroy()
+			mine:Destroy()
+		else
+			-- Fixed mine - respawn at same location
+			local mineName = mine:FindFirstChild("MineName")
+			local name = mineName and mineName.Value or "Unknown"
 
-		-- Schedule respawn at same location
-		if mineInfo then
-			task.spawn(function()
-				respawnMine(name)
-			end)
+			print("GoldMineManager:", name, "depleted by", player.Name)
+
+			-- Store info before destroying
+			local mineInfo = nil
+			for n, info in pairs(activeMines) do
+				if info.mine == mine then
+					mineInfo = info
+					break
+				end
+			end
+
+			-- Destroy old mine
+			mine:Destroy()
+
+			-- Schedule respawn at same location
+			if mineInfo then
+				task.spawn(function()
+					respawnMine(name)
+				end)
+			end
 		end
 	end
 end)
@@ -400,10 +426,257 @@ local function initializeMines()
 	end
 end
 
--- Wait a moment for map to load, then spawn mines
+-- =====================
+-- RANDOM BONUS VEINS
+-- =====================
+
+-- Remote event for vein spawn notification
+local veinSpawnedEvent = ReplicatedStorage:FindFirstChild("VeinSpawned")
+if not veinSpawnedEvent then
+	veinSpawnedEvent = Instance.new("RemoteEvent")
+	veinSpawnedEvent.Name = "VeinSpawned"
+	veinSpawnedEvent.Parent = ReplicatedStorage
+end
+
+-- Track active veins
+local activeVeins = {}
+
+-- Get spawn locations to avoid
+local function getSpawnLocations()
+	local spawns = {}
+	local gameArea = workspace:FindFirstChild("GameArea")
+	if gameArea then
+		local spawnLocations = gameArea:FindFirstChild("SpawnLocations")
+		if spawnLocations then
+			for _, spawn in ipairs(spawnLocations:GetChildren()) do
+				if spawn:IsA("BasePart") then
+					table.insert(spawns, spawn.Position)
+				end
+			end
+		end
+	end
+	return spawns
+end
+
+-- Find valid random position for vein
+local function findVeinSpawnPosition(mapCenter)
+	local spawnLocations = getSpawnLocations()
+
+	for attempt = 1, 20 do
+		local angle = math.random() * math.pi * 2
+		local distance = math.random(20, VEIN_SPAWN_RADIUS)
+		local x = mapCenter.X + math.cos(angle) * distance
+		local z = mapCenter.Z + math.sin(angle) * distance
+
+		-- Check distance from player spawns
+		local tooClose = false
+		for _, spawnPos in ipairs(spawnLocations) do
+			local dist = (Vector3.new(x, 0, z) - Vector3.new(spawnPos.X, 0, spawnPos.Z)).Magnitude
+			if dist < VEIN_MIN_DISTANCE_FROM_SPAWNS then
+				tooClose = true
+				break
+			end
+		end
+
+		if not tooClose then
+			return findGroundPosition(x, z)
+		end
+	end
+
+	-- Fallback
+	return findGroundPosition(mapCenter.X + math.random(-30, 30), mapCenter.Z + math.random(-30, 30))
+end
+
+-- Create a small bonus vein
+local function createVeinModel(position, goldAmount)
+	local vein = Instance.new("Model")
+	vein.Name = "GoldVein"
+
+	-- Mark as bonus vein
+	local isVein = Instance.new("BoolValue")
+	isVein.Name = "IsBonusVein"
+	isVein.Value = true
+	isVein.Parent = vein
+
+	-- Smaller ore part
+	local orePart = Instance.new("Part")
+	orePart.Name = "OrePart"
+	orePart.Size = Vector3.new(4, 3, 4)
+	orePart.Position = position
+	orePart.Anchored = true
+	orePart.Material = Enum.Material.Rock
+	orePart.BrickColor = BrickColor.new("Bright yellow")
+	orePart.Parent = vein
+
+	-- Smaller mesh
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.FileMesh
+	mesh.MeshId = "rbxassetid://1290033"
+	mesh.Scale = Vector3.new(1.5, 1, 1.5)
+	mesh.Parent = orePart
+
+	-- Brighter sparkle to draw attention
+	local sparkles = Instance.new("Sparkles")
+	sparkles.SparkleColor = Color3.new(1, 0.9, 0.3)
+	sparkles.Parent = orePart
+
+	-- Brighter light
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 220, 100)
+	light.Brightness = 2
+	light.Range = 20
+	light.Parent = orePart
+
+	-- Resource value
+	local resource = Instance.new("IntValue")
+	resource.Name = "Resource"
+	resource.Value = goldAmount
+	resource.Parent = vein
+
+	local maxResource = Instance.new("IntValue")
+	maxResource.Name = "MaxResource"
+	maxResource.Value = goldAmount
+	maxResource.Parent = vein
+
+	vein.PrimaryPart = orePart
+
+	-- Billboard
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "ResourceBar"
+	billboard.Size = UDim2.new(5, 0, 1.5, 0)
+	billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Adornee = orePart
+	billboard.Parent = orePart
+
+	-- "BONUS" label
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = "BONUS VEIN"
+	nameLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 14
+	nameLabel.TextStrokeTransparency = 0.3
+	nameLabel.Parent = billboard
+
+	-- Gold amount
+	local goldLabel = Instance.new("TextLabel")
+	goldLabel.Name = "GoldLabel"
+	goldLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	goldLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	goldLabel.BackgroundTransparency = 1
+	goldLabel.Text = goldAmount .. " gold"
+	goldLabel.TextColor3 = Color3.new(1, 1, 1)
+	goldLabel.Font = Enum.Font.Gotham
+	goldLabel.TextSize = 12
+	goldLabel.TextStrokeTransparency = 0.5
+	goldLabel.Parent = billboard
+
+	return vein
+end
+
+-- Spawn a random bonus vein
+local function spawnBonusVein()
+	local mapCenter = getMapCenter()
+	local position = findVeinSpawnPosition(mapCenter)
+	local goldAmount = math.random(VEIN_MIN_GOLD, VEIN_MAX_GOLD)
+
+	local vein = createVeinModel(position, goldAmount)
+	vein.Parent = workspace
+
+	-- Spawn animation
+	local orePart = vein:FindFirstChild("OrePart")
+	if orePart then
+		local originalSize = orePart.Size
+		orePart.Size = Vector3.new(0.1, 0.1, 0.1)
+		orePart.Transparency = 1
+
+		local growTween = TweenService:Create(orePart, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
+			Size = originalSize,
+			Transparency = 0
+		})
+		growTween:Play()
+
+		-- Particle burst
+		local particles = Instance.new("ParticleEmitter")
+		particles.Color = ColorSequence.new(Color3.fromRGB(255, 230, 100))
+		particles.Size = NumberSequence.new(0.8, 0)
+		particles.Lifetime = NumberRange.new(0.3, 0.6)
+		particles.Rate = 0
+		particles.Speed = NumberRange.new(8, 15)
+		particles.SpreadAngle = Vector2.new(180, 180)
+		particles.Parent = orePart
+
+		particles:Emit(20)
+		task.delay(0.8, function()
+			if particles.Parent then
+				particles:Destroy()
+			end
+		end)
+	end
+
+	-- Track vein
+	table.insert(activeVeins, vein)
+
+	-- Notify clients
+	veinSpawnedEvent:FireAllClients(position, goldAmount)
+
+	print("GoldMineManager: Bonus vein spawned with", goldAmount, "gold at", position)
+
+	-- Auto-despawn after lifespan
+	task.delay(VEIN_LIFESPAN, function()
+		if vein.Parent then
+			-- Fade out animation
+			local orePart = vein:FindFirstChild("OrePart")
+			if orePart then
+				local fadeTween = TweenService:Create(orePart, TweenInfo.new(0.5), {
+					Transparency = 1,
+					Size = Vector3.new(0.1, 0.1, 0.1)
+				})
+				fadeTween:Play()
+				fadeTween.Completed:Wait()
+			end
+
+			-- Remove from tracking
+			for i, v in ipairs(activeVeins) do
+				if v == vein then
+					table.remove(activeVeins, i)
+					break
+				end
+			end
+
+			vein:Destroy()
+			print("GoldMineManager: Bonus vein despawned (uncollected)")
+		end
+	end)
+
+	return vein
+end
+
+-- Handle vein collection (uses same MineGold event)
+-- The existing handler works for veins too, but veins don't respawn
+
+-- Vein spawn loop
+local function startVeinSpawning()
+	while true do
+		task.wait(VEIN_SPAWN_INTERVAL)
+		spawnBonusVein()
+	end
+end
+
+-- Wait a moment for map to load, then spawn mines and start vein spawning
 task.delay(3, function()
 	initializeMines()
 	print("GoldMineManager: Loaded with", #MINE_POSITIONS, "fixed mines")
+
+	-- Start bonus vein spawning after a short delay
+	task.delay(10, function()
+		print("GoldMineManager: Starting bonus vein spawns every", VEIN_SPAWN_INTERVAL, "seconds")
+		startVeinSpawning()
+	end)
 end)
 
 print("GoldMineManager: Initialized")

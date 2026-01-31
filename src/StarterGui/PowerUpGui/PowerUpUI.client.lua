@@ -271,6 +271,78 @@ if powerUpSpawned then
 	end)
 end
 
+-- Handle bonus vein spawn notification
+local veinSpawned = ReplicatedStorage:FindFirstChild("VeinSpawned")
+if veinSpawned then
+	veinSpawned.OnClientEvent:Connect(function(position, goldAmount)
+		-- Show spawn indicator
+		local character = player.Character
+		if not character then return end
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if not rootPart then return end
+
+		local distance = (position - rootPart.Position).Magnitude
+		if distance > 150 then return end
+
+		local indicator = Instance.new("Frame")
+		indicator.Size = UDim2.new(0, 180, 0, 35)
+		indicator.Position = UDim2.new(0.5, -90, 0.82, 0)
+		indicator.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+		indicator.BackgroundTransparency = 0.4
+		indicator.Parent = screenGui
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 8)
+		corner.Parent = indicator
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.fromRGB(255, 215, 0)
+		stroke.Thickness = 2
+		stroke.Parent = indicator
+
+		local text = Instance.new("TextLabel")
+		text.Size = UDim2.new(1, 0, 1, 0)
+		text.BackgroundTransparency = 1
+		text.Text = "BONUS VEIN: " .. goldAmount .. "g!"
+		text.TextColor3 = Color3.new(1, 1, 1)
+		text.Font = Enum.Font.GothamBold
+		text.TextSize = 14
+		text.Parent = indicator
+
+		-- Attention-grabbing animation
+		local pulse = TweenService:Create(indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 2, true), {
+			Size = UDim2.new(0, 195, 0, 40)
+		})
+		pulse:Play()
+
+		-- Fade out
+		task.delay(3, function()
+			local fadeOut = TweenService:Create(indicator, TweenInfo.new(0.5), {
+				BackgroundTransparency = 1
+			})
+			TweenService:Create(text, TweenInfo.new(0.5), {
+				TextTransparency = 1
+			}):Play()
+			TweenService:Create(stroke, TweenInfo.new(0.5), {
+				Transparency = 1
+			}):Play()
+			fadeOut:Play()
+			fadeOut.Completed:Wait()
+			indicator:Destroy()
+		end)
+
+		-- Play sound
+		local sound = Instance.new("Sound")
+		sound.SoundId = "rbxassetid://4612373815" -- Sparkle/coin sound
+		sound.Volume = 0.4
+		sound.Parent = screenGui
+		sound:Play()
+		sound.Ended:Connect(function()
+			sound:Destroy()
+		end)
+	end)
+end
+
 -- Update active effects
 RunService.Heartbeat:Connect(function()
 	for powerUpName, data in pairs(activeEffects) do

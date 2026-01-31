@@ -56,6 +56,7 @@ local COLORS = {
 	workshop = Color3.fromRGB(200, 150, 100),    -- Tan
 	powerup = Color3.fromRGB(255, 255, 255),     -- White (pulsing)
 	goldMine = Color3.fromRGB(255, 215, 0),      -- Gold
+	bonusVein = Color3.fromRGB(255, 230, 100),   -- Bright gold (pulsing faster)
 }
 
 -- Entity sizes on minimap
@@ -71,6 +72,7 @@ local SIZES = {
 	workshop = 6,
 	powerup = 6,
 	goldMine = 8,
+	bonusVein = 5,
 }
 
 -- Create minimap frame
@@ -312,6 +314,18 @@ local function updateMinimap()
 				local dot = updateDot("goldmine_" .. tostring(obj), orePart.Position, COLORS.goldMine, SIZES.goldMine, "diamond")
 				-- Subtle pulsing
 				dot.BackgroundTransparency = 0.1 + 0.15 * math.sin(tick() * 2)
+			end
+		end
+	end
+
+	-- Update bonus veins (faster pulsing to draw attention)
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name == "GoldVein" and obj:IsA("Model") then
+			local orePart = obj:FindFirstChild("OrePart")
+			if orePart then
+				local dot = updateDot("vein_" .. tostring(obj), orePart.Position, COLORS.bonusVein, SIZES.bonusVein, "circle")
+				-- Fast pulsing to indicate urgency
+				dot.BackgroundTransparency = 0.1 + 0.4 * math.sin(tick() * 8)
 			end
 		end
 	end
@@ -630,6 +644,19 @@ local function updateFullMap()
 				local label = mineName and mineName.Value or "Gold Mine"
 				local dot = updateFullMapDot("goldmine_" .. tostring(obj), orePart.Position, COLORS.goldMine, 14, "diamond", label)
 				dot.BackgroundTransparency = 0.1 + 0.15 * math.sin(tick() * 2)
+			end
+		end
+	end
+
+	-- Update bonus veins
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name == "GoldVein" and obj:IsA("Model") then
+			local orePart = obj:FindFirstChild("OrePart")
+			if orePart then
+				local resource = obj:FindFirstChild("Resource")
+				local label = resource and (resource.Value .. "g Bonus!") or "Bonus Vein"
+				local dot = updateFullMapDot("vein_" .. tostring(obj), orePart.Position, COLORS.bonusVein, 10, "circle", label)
+				dot.BackgroundTransparency = 0.1 + 0.4 * math.sin(tick() * 8)
 			end
 		end
 	end
