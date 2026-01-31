@@ -112,6 +112,9 @@ local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerI
 | Frostborn | Ice Blue | Immune to frost | +30% physical | Basic turrets |
 | Venomous | Green | Immune to poison | +30% frost | Frost Turret |
 | Horde | Dark Red | -20% physical, Small | +100% AOE/multishot | Cannon, MultiShot |
+| Mini | Orange | -20% physical (small target) | +50% AOE/multishot | Cannon, MultiShot |
+
+**Mini Kodos**: Tiny kodos that can fit through maze gaps (same size as players). Very fast, very fragile. Spawn on wave 6, 12, 18, etc. Forces players to use turrets, not just mazes!
 
 **Spawn Rates**: Normal kodos decrease over time, special types appear progressively (Armored/Swift from wave 4+, Frostborn/Venomous from wave 6+, Horde from wave 8+).
 

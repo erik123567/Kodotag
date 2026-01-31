@@ -59,6 +59,7 @@ local DIFFICULTY_MULTIPLIERS = {
 local BOSS_WAVE_INTERVAL = 5
 local SWARM_WAVE_INTERVAL = 7       -- Lots of weak kodos
 local ELITE_WAVE_INTERVAL = 10      -- Few but very strong kodos
+local MINI_WAVE_INTERVAL = 6        -- Mini kodos that fit through maze gaps!
 
 -- Boss Settings
 local BOSS_HEALTH_MULTIPLIER = 5
@@ -77,12 +78,22 @@ local ELITE_HEALTH_MULTIPLIER = 2.5 -- But much stronger
 local ELITE_DAMAGE_MULTIPLIER = 1.5
 local ELITE_GOLD_MULTIPLIER = 2     -- More gold reward
 
+-- Mini Wave Settings - they fit through maze gaps!
+local MINI_COUNT_MULTIPLIER = 2.5   -- Many mini kodos
+local MINI_HEALTH_MULTIPLIER = 0.3  -- Very fragile
+local MINI_SPEED_MULTIPLIER = 1.3   -- Fast
+
 -- Kodo Types - spawn chances increase with wave number
-local KODO_TYPES = {"Normal", "Armored", "Swift", "Frostborn", "Venomous", "Horde"}
-local function getKodoTypeForWave(wave, isSwarmWave)
+local KODO_TYPES = {"Normal", "Armored", "Swift", "Frostborn", "Venomous", "Horde", "Mini"}
+local function getKodoTypeForWave(wave, isSwarmWave, isMiniWave)
 	-- Swarm waves always spawn Horde kodos
 	if isSwarmWave then
 		return "Horde"
+	end
+
+	-- Mini waves always spawn Mini kodos (they fit through maze gaps!)
+	if isMiniWave then
+		return "Mini"
 	end
 
 	-- Early waves: mostly normal
@@ -97,7 +108,8 @@ local function getKodoTypeForWave(wave, isSwarmWave)
 		Swift = math.min(wave * 2, 20),            -- Increases slowly
 		Frostborn = math.min((wave - 5) * 2, 15),  -- Appears after wave 5
 		Venomous = math.min((wave - 5) * 2, 15),   -- Appears after wave 5
-		Horde = math.min((wave - 7) * 3, 20)       -- Appears after wave 7
+		Horde = math.min((wave - 7) * 3, 20),      -- Appears after wave 7
+		Mini = math.min((wave - 5) * 2, 15)        -- Appears after wave 5
 	}
 
 	-- Clamp negative weights to 0
@@ -430,10 +442,11 @@ local function spawnKodoWave()
 	local diffMult = DIFFICULTY_MULTIPLIERS[padType] or DIFFICULTY_MULTIPLIERS.SOLO
 	local playerCount = #Players:GetPlayers()
 
-	-- Determine wave type
+	-- Determine wave type (priority: Boss > Elite > Swarm > Mini)
 	local isBossWave = (currentWave % BOSS_WAVE_INTERVAL == 0)
-	local isSwarmWave = (currentWave % SWARM_WAVE_INTERVAL == 0) and not isBossWave
 	local isEliteWave = (currentWave % ELITE_WAVE_INTERVAL == 0) and not isBossWave
+	local isSwarmWave = (currentWave % SWARM_WAVE_INTERVAL == 0) and not isBossWave and not isEliteWave
+	local isMiniWave = (currentWave % MINI_WAVE_INTERVAL == 0) and not isBossWave and not isEliteWave and not isSwarmWave
 
 	-- Calculate base stats with exponential scaling
 	local waveMultiplier = currentWave - 1
@@ -472,6 +485,13 @@ local function spawnKodoWave()
 		goldMultiplier = ELITE_GOLD_MULTIPLIER
 		waveTypeText = "ELITE "
 		waveColor = Color3.new(0.8, 0.2, 1)
+	elseif isMiniWave then
+		-- Mini kodos fit through maze gaps! Many, fast, but fragile
+		kodoCount = math.floor(kodoCount * MINI_COUNT_MULTIPLIER)
+		kodoHealth = math.floor(kodoHealth * MINI_HEALTH_MULTIPLIER)
+		kodoSpeed = kodoSpeed * MINI_SPEED_MULTIPLIER
+		waveTypeText = "MINI "
+		waveColor = Color3.new(1, 0.7, 0.3) -- Orange
 	elseif isBossWave then
 		waveTypeText = "BOSS "
 		waveColor = Color3.new(1, 0, 0)
@@ -487,7 +507,7 @@ local function spawnKodoWave()
 	local kodoTypesToSpawn = {}
 	local waveComposition = {}
 	for i = 1, kodoCount do
-		local kodoType = getKodoTypeForWave(currentWave, isSwarmWave)
+		local kodoType = getKodoTypeForWave(currentWave, isSwarmWave, isMiniWave)
 		table.insert(kodoTypesToSpawn, kodoType)
 		waveComposition[kodoType] = (waveComposition[kodoType] or 0) + 1
 	end

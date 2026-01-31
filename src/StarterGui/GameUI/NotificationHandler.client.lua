@@ -443,7 +443,8 @@ if isReservedServer then
 		Swift = Color3.fromRGB(220, 220, 240),
 		Frostborn = Color3.fromRGB(100, 180, 255),
 		Venomous = Color3.fromRGB(80, 200, 80),
-		Horde = Color3.fromRGB(200, 80, 80)
+		Horde = Color3.fromRGB(200, 80, 80),
+		Mini = Color3.fromRGB(255, 180, 100)  -- Orange
 	}
 
 	-- Kodo type weaknesses for tips
@@ -453,7 +454,8 @@ if isReservedServer then
 		Swift = "Weak to: Frost (slows)",
 		Frostborn = "Weak to: Physical damage",
 		Venomous = "Weak to: Frost",
-		Horde = "Weak to: AOE, Multishot"
+		Horde = "Weak to: AOE, Multishot",
+		Mini = "Fits through gaps! Use AOE"
 	}
 
 	-- Listen for wave preview event
@@ -482,6 +484,9 @@ if isReservedServer then
 				elseif data.waveType == "ELITE" then
 					previewStroke.Color = Color3.new(0.8, 0.3, 1)
 					waveTitle.TextColor3 = Color3.new(0.9, 0.5, 1)
+				elseif data.waveType == "MINI" then
+					previewStroke.Color = Color3.new(1, 0.7, 0.3)
+					waveTitle.TextColor3 = Color3.new(1, 0.8, 0.4)
 				end
 			else
 				previewStroke.Color = Color3.new(1, 0.5, 0)

@@ -67,6 +67,20 @@ KodoAI.KODO_TYPES = {
 		speedMult = 1.2,
 		healthMult = 0.5,
 		sizeMult = 0.7         -- Smaller
+	},
+	Mini = {
+		name = "Mini Kodo",
+		color = Color3.fromRGB(255, 180, 100), -- Orange/tan
+		resistances = {
+			aoe = 1.5,         -- 50% extra AOE damage (grouped up)
+			multishot = 1.5,   -- 50% extra multishot damage
+			physical = 0.8     -- Slight physical resistance (small target)
+		},
+		speedMult = 1.5,       -- Very fast
+		healthMult = 0.3,      -- Very fragile
+		sizeMult = 0.4,        -- Tiny - same size as player
+		agentRadius = 1.0,     -- Can fit through player-sized gaps!
+		canFitThroughGaps = true
 	}
 }
 
@@ -445,6 +459,15 @@ function KodoAI.runAI(kodo)
 
 	if not humanoid or not rootPart then return end
 
+	-- Get Kodo type for pathfinding settings
+	local typeValue = kodo:FindFirstChild("KodoType")
+	local kodoTypeName = typeValue and typeValue.Value or "Normal"
+	local typeConfig = KodoAI.KODO_TYPES[kodoTypeName] or KodoAI.KODO_TYPES.Normal
+
+	-- Mini Kodos can fit through player-sized gaps
+	local thisKodoAgentRadius = typeConfig.agentRadius or KODO_AGENT_RADIUS
+	local canFitThroughGaps = typeConfig.canFitThroughGaps or false
+
 	-- State variables
 	local usingPathfinding = false
 	local currentPath = nil
@@ -455,10 +478,11 @@ function KodoAI.runAI(kodo)
 	local lastAttackTime = 0
 
 	-- Maze navigation: Kodos try to find paths before attacking walls
+	-- Mini Kodos don't need to attack walls - they can fit through gaps!
 	local pathfindAttempts = 0       -- How many times pathfinding failed
-	local MAX_PATH_ATTEMPTS = 3      -- Try this many times before attacking
+	local MAX_PATH_ATTEMPTS = canFitThroughGaps and 10 or 3  -- Mini Kodos try harder to find paths
 	local frustrationLevel = 0       -- Increases when stuck, decreases when moving
-	local FRUSTRATION_THRESHOLD = 5  -- Attack walls after this much frustration
+	local FRUSTRATION_THRESHOLD = canFitThroughGaps and 15 or 5  -- Mini Kodos rarely attack walls
 
 	-- Movement reached connection
 	local moveConnection = humanoid.MoveToFinished:Connect(function(reached)
@@ -555,18 +579,17 @@ function KodoAI.runAI(kodo)
 								usingPathfinding = false
 								humanoid:MoveTo(targetPos)
 							else
-								-- Try pathfinding with Kodo-sized agent
-							-- Kodos are larger than players, so they can't fit through small gaps
-							local path = PathfindingService:CreatePath({
-								AgentRadius = KODO_AGENT_RADIUS,
-								AgentHeight = KODO_AGENT_HEIGHT,
-								AgentCanJump = false,
-								WaypointSpacing = 4,
-								Costs = {
-									-- Prefer open paths, avoid tight spaces
-									Wall = math.huge  -- Cannot path through walls
-								}
-							})
+								-- Try pathfinding with appropriate agent size
+								-- Mini Kodos use smaller radius and can fit through player gaps
+								local path = PathfindingService:CreatePath({
+									AgentRadius = thisKodoAgentRadius,
+									AgentHeight = canFitThroughGaps and 5 or KODO_AGENT_HEIGHT,
+									AgentCanJump = false,
+									WaypointSpacing = 4,
+									Costs = {
+										Wall = math.huge  -- Cannot path through walls
+									}
+								})
 
 								local success = pcall(function()
 									path:ComputeAsync(rootPart.Position, targetPos)
