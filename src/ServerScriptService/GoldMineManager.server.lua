@@ -45,9 +45,11 @@ local RoundManager = _G.RoundManager
 -- Active mines
 local activeMines = {}
 
--- Calculate map center from spawn locations
+-- Calculate map center from spawn locations or Baseplate
 local function getMapCenter()
 	local center = Vector3.new(0, 0, 0)
+
+	-- Try GameArea spawn locations first
 	local gameArea = workspace:FindFirstChild("GameArea")
 	if gameArea then
 		local spawnLocations = gameArea:FindFirstChild("SpawnLocations")
@@ -62,9 +64,30 @@ local function getMapCenter()
 			end
 			if count > 0 then
 				center = totalPos / count
+				print("GoldMineManager: Using SpawnLocations center:", center)
+				return center
 			end
 		end
 	end
+
+	-- Fallback: use Baseplate center
+	local baseplate = workspace:FindFirstChild("Baseplate")
+	if baseplate and baseplate:IsA("BasePart") then
+		center = baseplate.Position
+		print("GoldMineManager: Using Baseplate center:", center)
+		return center
+	end
+
+	-- Fallback: use any SpawnLocation in workspace
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("SpawnLocation") then
+			center = obj.Position
+			print("GoldMineManager: Using SpawnLocation center:", center)
+			return center
+		end
+	end
+
+	print("GoldMineManager: Using default center (0,0,0)")
 	return center
 end
 
@@ -87,8 +110,8 @@ print("GoldMineManager: Created RemoteEvents")
 
 -- Find ground position at coordinates
 local function findGroundPosition(x, z)
-	local rayStart = Vector3.new(x, 100, z)
-	local rayDirection = Vector3.new(0, -200, 0)
+	local rayStart = Vector3.new(x, 200, z)
+	local rayDirection = Vector3.new(0, -400, 0)
 
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -96,8 +119,18 @@ local function findGroundPosition(x, z)
 
 	local result = workspace:Raycast(rayStart, rayDirection, rayParams)
 	if result then
-		return result.Position + Vector3.new(0, MINE_HEIGHT, 0)
+		local groundY = result.Position.Y + MINE_HEIGHT
+		return Vector3.new(x, groundY, z)
 	end
+
+	-- Fallback: try to find Baseplate height
+	local baseplate = workspace:FindFirstChild("Baseplate")
+	if baseplate and baseplate:IsA("BasePart") then
+		local groundY = baseplate.Position.Y + (baseplate.Size.Y / 2) + MINE_HEIGHT
+		return Vector3.new(x, groundY, z)
+	end
+
+	-- Last resort fallback
 	return Vector3.new(x, MINE_HEIGHT, z)
 end
 
@@ -264,7 +297,13 @@ end
 -- Spawn a mine at a fixed position
 local function spawnMine(mineData, mapCenter)
 	local worldPos = mapCenter + mineData.offset
+	print("GoldMineManager: Calculating position for", mineData.name)
+	print("  Map center:", mapCenter)
+	print("  Offset:", mineData.offset)
+	print("  World pos:", worldPos)
+
 	local groundPos = findGroundPosition(worldPos.X, worldPos.Z)
+	print("  Ground pos:", groundPos)
 
 	local mine = createMineModel(groundPos, mineData.name)
 	mine.Parent = workspace
