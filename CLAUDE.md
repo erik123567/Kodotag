@@ -116,6 +116,18 @@ local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerI
 
 **Mini Kodos**: Tiny kodos that can fit through maze gaps (same size as players). Very fast, very fragile. Spawn on wave 6, 12, 18, etc. Forces players to use turrets, not just mazes!
 
+### Death Abilities
+Dead players can spend gold to help surviving teammates:
+
+| Ability | Cost | Cooldown | Effect |
+|---------|------|----------|--------|
+| **Slow Aura** | 40g | 15s | Slow all Kodos by 50% for 5 seconds |
+| **Lightning Strike** | 50g | 20s | Deal 100 damage to all Kodos |
+| **Speed Boost** | 30g | 25s | All survivors run 50% faster for 8 seconds |
+| **Quick Revive** | 100g | - | Instantly respawn (one-time per death) |
+
+Death abilities panel appears on the left side of screen when player dies.
+
 **Spawn Rates**: Normal kodos decrease over time, special types appear progressively (Armored/Swift from wave 4+, Frostborn/Venomous from wave 6+, Horde from wave 8+).
 
 ### Turret Types

@@ -164,6 +164,7 @@ local playerStats = {}
 
 RoundManager.playerStats = playerStats
 RoundManager.alivePlayers = alivePlayers
+RoundManager.deadPlayers = deadPlayers
 
 -- Create RemoteEvents
 local updateGameState = Instance.new("RemoteEvent")
@@ -440,6 +441,12 @@ function handlePlayerDeath(player)
 		end)
 	end
 end
+
+-- Expose functions for death abilities
+RoundManager.removeFromDeadList = removeFromDeadList
+RoundManager.addToAliveList = addToAliveList
+RoundManager.handlePlayerDeath = handlePlayerDeath
+RoundManager.isPlayerDead = isPlayerDead
 
 -- Spawn wave of Kodos
 local function spawnKodoWave()
