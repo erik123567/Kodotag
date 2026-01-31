@@ -193,8 +193,10 @@ local WAVE_PREVIEW_TIME = 5 -- Seconds to show preview before spawning
 local function returnToLobby()
 	print("Returning all players to lobby in " .. RETURN_TO_LOBBY_DELAY .. " seconds...")
 
-	-- Collect final stats for each player
+	-- Collect final stats for each player and save high scores
 	local finalStats = {}
+	local highScoreData = {}
+
 	for _, player in ipairs(Players:GetPlayers()) do
 		local stats = playerStats[player.Name] or {deaths = 0, saves = 0, kodoKills = 0, gold = 0}
 		finalStats[player.Name] = {
@@ -204,12 +206,24 @@ local function returnToLobby()
 			kodoKills = stats.kodoKills,
 			goldEarned = stats.gold
 		}
+
+		-- Save high score and check for new record
+		if _G.HighScoreManager then
+			local isNewRecord, data = _G.HighScoreManager.saveHighScore(player, currentWave, stats.kodoKills)
+			highScoreData[player.Name] = {
+				bestWave = data.bestWave,
+				isNewRecord = isNewRecord,
+				totalGames = data.totalGames,
+				totalKills = data.totalKills
+			}
+		end
 	end
 
 	-- Send game over screen to all clients
 	showGameOver:FireAllClients({
 		wavesReached = currentWave,
 		playerStats = finalStats,
+		highScores = highScoreData,
 		returnDelay = RETURN_TO_LOBBY_DELAY
 	})
 

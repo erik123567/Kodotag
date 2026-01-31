@@ -624,16 +624,59 @@ if isReservedServer then
 			titleLabel.TextSize = 32
 			titleLabel.Parent = gameOverScreen
 
+			-- Check for new record
+			local myHighScore = data.highScores and data.highScores[player.Name]
+			local isNewRecord = myHighScore and myHighScore.isNewRecord
+			local bestWave = myHighScore and myHighScore.bestWave or (data.wavesReached or 1)
+
 			-- Waves reached
 			local wavesLabel = Instance.new("TextLabel")
-			wavesLabel.Size = UDim2.new(1, 0, 0, 30)
-			wavesLabel.Position = UDim2.new(0, 0, 0, 55)
+			wavesLabel.Size = UDim2.new(0.6, 0, 0, 30)
+			wavesLabel.Position = UDim2.new(0, 10, 0, 55)
 			wavesLabel.BackgroundTransparency = 1
 			wavesLabel.Text = "Survived " .. (data.wavesReached or 1) .. " Waves"
 			wavesLabel.TextColor3 = Color3.new(1, 1, 0.5)
 			wavesLabel.Font = Enum.Font.GothamBold
 			wavesLabel.TextSize = 24
+			wavesLabel.TextXAlignment = Enum.TextXAlignment.Left
 			wavesLabel.Parent = gameOverScreen
+
+			-- Personal best display
+			local bestLabel = Instance.new("TextLabel")
+			bestLabel.Size = UDim2.new(0.35, 0, 0, 20)
+			bestLabel.Position = UDim2.new(0.63, 0, 0, 55)
+			bestLabel.BackgroundTransparency = 1
+			bestLabel.Text = "Personal Best: Wave " .. bestWave
+			bestLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+			bestLabel.Font = Enum.Font.Gotham
+			bestLabel.TextSize = 14
+			bestLabel.TextXAlignment = Enum.TextXAlignment.Right
+			bestLabel.Parent = gameOverScreen
+
+			-- NEW RECORD indicator
+			if isNewRecord then
+				local recordLabel = Instance.new("TextLabel")
+				recordLabel.Size = UDim2.new(0.35, 0, 0, 18)
+				recordLabel.Position = UDim2.new(0.63, 0, 0, 72)
+				recordLabel.BackgroundTransparency = 1
+				recordLabel.Text = "NEW RECORD!"
+				recordLabel.TextColor3 = Color3.new(1, 0.85, 0)
+				recordLabel.Font = Enum.Font.GothamBlack
+				recordLabel.TextSize = 16
+				recordLabel.TextXAlignment = Enum.TextXAlignment.Right
+				recordLabel.Parent = gameOverScreen
+
+				-- Animate the new record text
+				task.spawn(function()
+					while recordLabel and recordLabel.Parent do
+						for i = 0, 1, 0.05 do
+							if not recordLabel or not recordLabel.Parent then break end
+							recordLabel.TextColor3 = Color3.new(1, 0.85 + 0.15 * math.sin(i * math.pi * 2), 0)
+							task.wait(0.05)
+						end
+					end
+				end)
+			end
 
 			-- Leaderboard section
 			local leaderboardFrame = Instance.new("Frame")
@@ -714,6 +757,8 @@ if isReservedServer then
 			for rank, playerData in ipairs(sortedPlayers) do
 				local isLocalPlayer = (playerData.name == player.Name)
 				local stats = playerData.stats
+				local playerHighScore = data.highScores and data.highScores[playerData.name]
+				local playerGotRecord = playerHighScore and playerHighScore.isNewRecord
 
 				local row = Instance.new("Frame")
 				row.Name = playerData.name
@@ -726,11 +771,16 @@ if isReservedServer then
 				rowCorner.CornerRadius = UDim.new(0, 6)
 				rowCorner.Parent = row
 
-				-- Highlight border for local player
+				-- Highlight border for local player or new record
 				if isLocalPlayer then
 					local rowStroke = Instance.new("UIStroke")
 					rowStroke.Color = Color3.new(0.5, 1, 0.5)
 					rowStroke.Thickness = 2
+					rowStroke.Parent = row
+				elseif playerGotRecord then
+					local rowStroke = Instance.new("UIStroke")
+					rowStroke.Color = Color3.new(1, 0.85, 0)
+					rowStroke.Thickness = 1
 					rowStroke.Parent = row
 				end
 
@@ -745,13 +795,18 @@ if isReservedServer then
 				rankLabel.TextSize = 14
 				rankLabel.Parent = row
 
-				-- Player name
+				-- Player name (with NEW! indicator for records)
+				local displayName = playerData.name
+				if playerGotRecord then
+					displayName = playerData.name .. " *NEW*"
+				end
+
 				local nameLabel = Instance.new("TextLabel")
 				nameLabel.Size = UDim2.new(0.32, 0, 1, 0)
 				nameLabel.Position = UDim2.new(0.08, 0, 0, 0)
 				nameLabel.BackgroundTransparency = 1
-				nameLabel.Text = playerData.name
-				nameLabel.TextColor3 = isLocalPlayer and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1)
+				nameLabel.Text = displayName
+				nameLabel.TextColor3 = playerGotRecord and Color3.new(1, 0.85, 0) or (isLocalPlayer and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1))
 				nameLabel.Font = Enum.Font.GothamBold
 				nameLabel.TextSize = 14
 				nameLabel.TextXAlignment = Enum.TextXAlignment.Left
