@@ -1,5 +1,10 @@
+-- GOLD MINE MANAGER
+-- Fixed gold mines at strategic map locations
+-- Higher risk/reward than passive farm income
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 -- Only run on game servers (reserved servers)
 local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
@@ -11,11 +16,19 @@ end
 print("GoldMineManager: Starting...")
 
 -- Settings
-local MINE_COUNT = 5
-local MINE_RESOURCE = 200  -- Total gold in each mine
-local MINE_RESPAWN_TIME = 60  -- Seconds before depleted mine respawns
-local SPAWN_AREA_SIZE = 200  -- How far from center mines can spawn
-local SPAWN_HEIGHT = 3  -- Height above ground
+local MINE_RESOURCE = 300  -- Total gold in each mine
+local MINE_RESPAWN_TIME = 45  -- Seconds before depleted mine respawns
+local MINING_RANGE = 12  -- How close player must be to mine
+local MINE_HEIGHT = 3  -- Height above ground
+
+-- Fixed mine positions (strategic locations around the map)
+-- These create a diamond pattern around the center, encouraging map control
+local MINE_POSITIONS = {
+	{name = "North Mine", offset = Vector3.new(0, 0, -70)},
+	{name = "South Mine", offset = Vector3.new(0, 0, 70)},
+	{name = "East Mine", offset = Vector3.new(70, 0, 0)},
+	{name = "West Mine", offset = Vector3.new(-70, 0, 0)},
+}
 
 -- Wait for RoundManager
 wait(2)
@@ -23,6 +36,29 @@ local RoundManager = _G.RoundManager
 
 -- Active mines
 local activeMines = {}
+
+-- Calculate map center from spawn locations
+local function getMapCenter()
+	local center = Vector3.new(0, 0, 0)
+	local gameArea = workspace:FindFirstChild("GameArea")
+	if gameArea then
+		local spawnLocations = gameArea:FindFirstChild("SpawnLocations")
+		if spawnLocations and #spawnLocations:GetChildren() > 0 then
+			local totalPos = Vector3.new(0, 0, 0)
+			local count = 0
+			for _, spawn in ipairs(spawnLocations:GetChildren()) do
+				if spawn:IsA("BasePart") then
+					totalPos = totalPos + spawn.Position
+					count = count + 1
+				end
+			end
+			if count > 0 then
+				center = totalPos / count
+			end
+		end
+	end
+	return center
+end
 
 -- Create RemoteEvents
 local mineGoldEvent = ReplicatedStorage:FindFirstChild("MineGold")
@@ -41,32 +77,61 @@ end
 
 print("GoldMineManager: Created RemoteEvents")
 
+-- Find ground position at coordinates
+local function findGroundPosition(x, z)
+	local rayStart = Vector3.new(x, 100, z)
+	local rayDirection = Vector3.new(0, -200, 0)
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = {}
+
+	local result = workspace:Raycast(rayStart, rayDirection, rayParams)
+	if result then
+		return result.Position + Vector3.new(0, MINE_HEIGHT, 0)
+	end
+	return Vector3.new(x, MINE_HEIGHT, z)
+end
+
 -- Create a gold mine model
-local function createMineModel(position)
+local function createMineModel(position, mineName)
 	local mine = Instance.new("Model")
 	mine.Name = "GoldMine"
+
+	-- Store mine name for identification
+	local nameValue = Instance.new("StringValue")
+	nameValue.Name = "MineName"
+	nameValue.Value = mineName
+	nameValue.Parent = mine
 
 	-- Main rock/ore part
 	local orePart = Instance.new("Part")
 	orePart.Name = "OrePart"
-	orePart.Size = Vector3.new(6, 4, 6)
+	orePart.Size = Vector3.new(8, 5, 8)
 	orePart.Position = position
 	orePart.Anchored = true
 	orePart.Material = Enum.Material.Rock
 	orePart.BrickColor = BrickColor.new("Bright yellow")
 	orePart.Parent = mine
 
-	-- Add some visual detail
+	-- Add some visual detail - larger rock mesh
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.FileMesh
 	mesh.MeshId = "rbxassetid://1290033"  -- Rock mesh
-	mesh.Scale = Vector3.new(2, 1.5, 2)
+	mesh.Scale = Vector3.new(3, 2, 3)
 	mesh.Parent = orePart
 
 	-- Sparkle effect
 	local sparkles = Instance.new("Sparkles")
 	sparkles.SparkleColor = Color3.new(1, 0.84, 0)
 	sparkles.Parent = orePart
+
+	-- Point light to make it visible
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 200, 50)
+	light.Brightness = 1
+	light.Range = 15
+	light.Parent = orePart
 
 	-- Resource value
 	local resource = Instance.new("IntValue")
@@ -85,19 +150,37 @@ local function createMineModel(position)
 	-- Create resource bar (BillboardGui)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "ResourceBar"
-	billboard.Size = UDim2.new(6, 0, 1, 0)
-	billboard.StudsOffset = Vector3.new(0, 4, 0)
+	billboard.Size = UDim2.new(8, 0, 2, 0)
+	billboard.StudsOffset = Vector3.new(0, 5, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Adornee = orePart
 	billboard.Parent = orePart
 
+	-- Mine name label
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = mineName
+	nameLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 16
+	nameLabel.TextStrokeTransparency = 0.3
+	nameLabel.Parent = billboard
+
 	local background = Instance.new("Frame")
 	background.Name = "Background"
-	background.Size = UDim2.new(1, 0, 1, 0)
+	background.Size = UDim2.new(0.8, 0, 0.3, 0)
+	background.Position = UDim2.new(0.1, 0, 0.45, 0)
 	background.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
 	background.BorderSizePixel = 2
 	background.BorderColor3 = Color3.new(0, 0, 0)
 	background.Parent = billboard
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = background
 
 	local resourceBar = Instance.new("Frame")
 	resourceBar.Name = "ResourceBar"
@@ -106,16 +189,21 @@ local function createMineModel(position)
 	resourceBar.BorderSizePixel = 0
 	resourceBar.Parent = background
 
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(0, 4)
+	barCorner.Parent = resourceBar
+
 	local resourceText = Instance.new("TextLabel")
 	resourceText.Name = "ResourceText"
-	resourceText.Size = UDim2.new(1, 0, 1, 0)
+	resourceText.Size = UDim2.new(1, 0, 0.25, 0)
+	resourceText.Position = UDim2.new(0, 0, 0.75, 0)
 	resourceText.BackgroundTransparency = 1
-	resourceText.Text = "Gold Mine"
+	resourceText.Text = MINE_RESOURCE .. " gold"
 	resourceText.TextColor3 = Color3.new(1, 1, 1)
-	resourceText.TextScaled = true
-	resourceText.Font = Enum.Font.GothamBold
+	resourceText.Font = Enum.Font.Gotham
+	resourceText.TextSize = 12
 	resourceText.TextStrokeTransparency = 0.5
-	resourceText.Parent = background
+	resourceText.Parent = billboard
 
 	return mine
 end
@@ -130,9 +218,10 @@ local function updateMineVisuals(mine)
 		local billboard = orePart:FindFirstChild("ResourceBar")
 		if billboard then
 			local background = billboard:FindFirstChild("Background")
+			local resourceText = billboard:FindFirstChild("ResourceText")
+
 			if background then
 				local bar = background:FindFirstChild("ResourceBar")
-				local text = background:FindFirstChild("ResourceText")
 
 				if bar then
 					local percent = resource.Value / maxResource.Value
@@ -147,86 +236,85 @@ local function updateMineVisuals(mine)
 						bar.BackgroundColor3 = Color3.new(1, 0.2, 0)
 					end
 				end
-
-				if text then
-					text.Text = resource.Value .. " / " .. maxResource.Value
-				end
 			end
+
+			if resourceText then
+				resourceText.Text = resource.Value .. " gold"
+			end
+		end
+
+		-- Dim the mine when low on resources
+		local percent = resource.Value / maxResource.Value
+		if percent < 0.1 then
+			orePart.Transparency = 0.5
+		else
+			orePart.Transparency = 0
 		end
 	end
 end
 
--- Find valid spawn position
-local function findSpawnPosition()
-	local attempts = 0
-	local maxAttempts = 20
+-- Spawn a mine at a fixed position
+local function spawnMine(mineData, mapCenter)
+	local worldPos = mapCenter + mineData.offset
+	local groundPos = findGroundPosition(worldPos.X, worldPos.Z)
 
-	while attempts < maxAttempts do
-		local x = math.random(-SPAWN_AREA_SIZE, SPAWN_AREA_SIZE)
-		local z = math.random(-SPAWN_AREA_SIZE, SPAWN_AREA_SIZE)
-
-		-- Raycast down to find ground
-		local rayStart = Vector3.new(x, 100, z)
-		local rayDirection = Vector3.new(0, -200, 0)
-
-		local rayParams = RaycastParams.new()
-		rayParams.FilterType = Enum.RaycastFilterType.Exclude
-		rayParams.FilterDescendantsInstances = {}
-
-		local result = workspace:Raycast(rayStart, rayDirection, rayParams)
-
-		if result then
-			local position = result.Position + Vector3.new(0, SPAWN_HEIGHT, 0)
-
-			-- Check if too close to other mines
-			local tooClose = false
-			for _, mine in ipairs(activeMines) do
-				if mine and mine.Parent then
-					local minePart = mine:FindFirstChild("OrePart")
-					if minePart then
-						local distance = (minePart.Position - position).Magnitude
-						if distance < 30 then
-							tooClose = true
-							break
-						end
-					end
-				end
-			end
-
-			if not tooClose then
-				return position
-			end
-		end
-
-		attempts = attempts + 1
-	end
-
-	-- Fallback position
-	return Vector3.new(math.random(-50, 50), SPAWN_HEIGHT, math.random(-50, 50))
-end
-
--- Spawn a mine
-local function spawnMine()
-	local position = findSpawnPosition()
-	local mine = createMineModel(position)
+	local mine = createMineModel(groundPos, mineData.name)
 	mine.Parent = workspace
 
-	table.insert(activeMines, mine)
-	print("GoldMineManager: Spawned mine at", position)
+	activeMines[mineData.name] = {
+		mine = mine,
+		data = mineData,
+		mapCenter = mapCenter
+	}
 
+	print("GoldMineManager: Spawned", mineData.name, "at", groundPos)
 	return mine
 end
 
--- Respawn depleted mine
-local function respawnMine(index)
+-- Respawn depleted mine at same location
+local function respawnMine(mineName)
+	local mineInfo = activeMines[mineName]
+	if not mineInfo then return end
+
+	-- Visual indicator that mine is respawning
+	print("GoldMineManager:", mineName, "will respawn in", MINE_RESPAWN_TIME, "seconds")
+
 	wait(MINE_RESPAWN_TIME)
 
-	local position = findSpawnPosition()
-	local mine = createMineModel(position)
-	mine.Parent = workspace
+	-- Respawn at same position
+	local mine = spawnMine(mineInfo.data, mineInfo.mapCenter)
 
-	activeMines[index] = mine
-	print("GoldMineManager: Respawned mine at", position)
+	-- Spawn effect
+	local orePart = mine:FindFirstChild("OrePart")
+	if orePart then
+		-- Grow animation
+		local originalSize = orePart.Size
+		orePart.Size = Vector3.new(0.1, 0.1, 0.1)
+		orePart.Transparency = 1
+
+		local growTween = TweenService:Create(orePart, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+			Size = originalSize,
+			Transparency = 0
+		})
+		growTween:Play()
+
+		-- Particle burst
+		local particles = Instance.new("ParticleEmitter")
+		particles.Color = ColorSequence.new(Color3.fromRGB(255, 215, 0))
+		particles.Size = NumberSequence.new(1, 0)
+		particles.Lifetime = NumberRange.new(0.5, 1)
+		particles.Rate = 0
+		particles.Speed = NumberRange.new(10, 20)
+		particles.SpreadAngle = Vector2.new(180, 180)
+		particles.Parent = orePart
+
+		particles:Emit(30)
+		task.delay(1, function()
+			particles:Destroy()
+		end)
+	end
+
+	print("GoldMineManager:", mineName, "respawned!")
 end
 
 -- Handle mining request
@@ -244,8 +332,7 @@ mineGoldEvent.OnServerEvent:Connect(function(player, mine, mineAmount)
 	if not orePart then return end
 
 	local distance = (humanoidRootPart.Position - orePart.Position).Magnitude
-	if distance > 15 then
-		print("GoldMineManager:", player.Name, "too far from mine")
+	if distance > MINING_RANGE then
 		return
 	end
 
@@ -267,8 +354,8 @@ mineGoldEvent.OnServerEvent:Connect(function(player, mine, mineAmount)
 		local stats = RoundManager.playerStats[player.Name]
 		if stats then
 			stats.gold = stats.gold + actualAmount
+			stats.goldEarned = (stats.goldEarned or 0) + actualAmount
 			RoundManager.broadcastPlayerStats()
-			print("GoldMineManager:", player.Name, "mined", actualAmount, "gold. Mine has", resource.Value, "left")
 		end
 	end
 
@@ -277,30 +364,46 @@ mineGoldEvent.OnServerEvent:Connect(function(player, mine, mineAmount)
 
 	-- Check if depleted
 	if resource.Value <= 0 then
-		print("GoldMineManager: Mine depleted!")
+		local mineName = mine:FindFirstChild("MineName")
+		local name = mineName and mineName.Value or "Unknown"
 
-		-- Find index and schedule respawn
-		for i, activeMine in ipairs(activeMines) do
-			if activeMine == mine then
-				-- Destroy old mine
-				mine:Destroy()
-				activeMines[i] = nil
+		print("GoldMineManager:", name, "depleted by", player.Name)
 
-				-- Schedule respawn
-				task.spawn(function()
-					respawnMine(i)
-				end)
-
+		-- Store info before destroying
+		local mineInfo = nil
+		for n, info in pairs(activeMines) do
+			if info.mine == mine then
+				mineInfo = info
 				break
 			end
+		end
+
+		-- Destroy old mine
+		mine:Destroy()
+
+		-- Schedule respawn at same location
+		if mineInfo then
+			task.spawn(function()
+				respawnMine(name)
+			end)
 		end
 	end
 end)
 
--- Initial spawn
-print("GoldMineManager: Spawning initial mines...")
-for i = 1, MINE_COUNT do
-	spawnMine()
+-- Initial spawn of all fixed mines
+local function initializeMines()
+	local mapCenter = getMapCenter()
+	print("GoldMineManager: Map center at", mapCenter)
+
+	for _, mineData in ipairs(MINE_POSITIONS) do
+		spawnMine(mineData, mapCenter)
+	end
 end
 
-print("GoldMineManager: Loaded with", MINE_COUNT, "mines")
+-- Wait a moment for map to load, then spawn mines
+task.delay(3, function()
+	initializeMines()
+	print("GoldMineManager: Loaded with", #MINE_POSITIONS, "fixed mines")
+end)
+
+print("GoldMineManager: Initialized")

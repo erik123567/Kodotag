@@ -55,6 +55,7 @@ local COLORS = {
 	farm = Color3.fromRGB(100, 200, 100),        -- Light green
 	workshop = Color3.fromRGB(200, 150, 100),    -- Tan
 	powerup = Color3.fromRGB(255, 255, 255),     -- White (pulsing)
+	goldMine = Color3.fromRGB(255, 215, 0),      -- Gold
 }
 
 -- Entity sizes on minimap
@@ -69,6 +70,7 @@ local SIZES = {
 	farm = 5,
 	workshop = 6,
 	powerup = 6,
+	goldMine = 8,
 }
 
 -- Create minimap frame
@@ -302,6 +304,18 @@ local function updateMinimap()
 		end
 	end
 
+	-- Update gold mines
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name == "GoldMine" and obj:IsA("Model") then
+			local orePart = obj:FindFirstChild("OrePart")
+			if orePart then
+				local dot = updateDot("goldmine_" .. tostring(obj), orePart.Position, COLORS.goldMine, SIZES.goldMine, "diamond")
+				-- Subtle pulsing
+				dot.BackgroundTransparency = 0.1 + 0.15 * math.sin(tick() * 2)
+			end
+		end
+	end
+
 	-- Clean up dots for removed entities
 	cleanupHiddenDots()
 end
@@ -323,7 +337,7 @@ legendLayout.Parent = legendFrame
 local legendItems = {
 	{color = COLORS.player, text = "You"},
 	{color = COLORS.kodo, text = "Kodo"},
-	{color = COLORS.powerup, text = "Pickup"},
+	{color = COLORS.goldMine, text = "Mine"},
 }
 
 for _, item in ipairs(legendItems) do
@@ -607,6 +621,19 @@ local function updateFullMap()
 		end
 	end
 
+	-- Update gold mines
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name == "GoldMine" and obj:IsA("Model") then
+			local orePart = obj:FindFirstChild("OrePart")
+			local mineName = obj:FindFirstChild("MineName")
+			if orePart then
+				local label = mineName and mineName.Value or "Gold Mine"
+				local dot = updateFullMapDot("goldmine_" .. tostring(obj), orePart.Position, COLORS.goldMine, 14, "diamond", label)
+				dot.BackgroundTransparency = 0.1 + 0.15 * math.sin(tick() * 2)
+			end
+		end
+	end
+
 	cleanupHiddenFullMapDots()
 end
 
@@ -629,9 +656,9 @@ local fullLegendItems = {
 	{color = COLORS.player, text = "You"},
 	{color = COLORS.otherPlayer, text = "Allies"},
 	{color = COLORS.kodo, text = "Kodos"},
+	{color = COLORS.goldMine, text = "Mines"},
 	{color = COLORS.turret, text = "Turrets"},
-	{color = COLORS.wall, text = "Walls"},
-	{color = COLORS.powerup, text = "Power-Ups"},
+	{color = COLORS.powerup, text = "Pickups"},
 }
 
 for _, item in ipairs(fullLegendItems) do

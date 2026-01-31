@@ -142,6 +142,28 @@ Random power-ups spawn around the map every 25 seconds (max 5 at once). They des
 
 Power-ups spawn at random positions, avoiding player spawn areas. They incentivize leaving base to take risks for rewards.
 
+### Economy System
+Multiple income sources with different risk/reward profiles:
+
+| Source | Risk | Income Rate | Notes |
+|--------|------|-------------|-------|
+| **Base Passive** | None | 1g / 5 sec | Always active |
+| **Farms** | Low | 1g / 5 sec per farm | Build near base, can be destroyed |
+| **Gold Mines** | High | ~10g / sec while mining | Must stand at mine, exposed to Kodos |
+| **Kill Gold** | Medium | Per Kodo kill | Rewards good turret placement |
+| **Power-ups** | High | Variable | Random spawns, Gold Rush = +50g |
+
+### Fixed Gold Mines
+4 permanent gold mines at fixed locations around the map (North, South, East, West - 70 studs from center):
+
+- **300 gold** per mine
+- **45 second respawn** after depletion
+- Shown as **gold diamonds** on minimap/full map
+- Labels show mine name (e.g., "North Mine")
+- Mining requires standing within 12 studs
+
+Strategic importance: Mines are placed between player spawns and the dangerous outer areas, creating risk/reward decisions.
+
 **Spawn Rates**: Normal kodos decrease over time, special types appear progressively (Armored/Swift from wave 4+, Frostborn/Venomous from wave 6+, Horde from wave 8+).
 
 ### Turret Types
