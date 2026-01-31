@@ -370,65 +370,71 @@ if isReservedServer then
 	end)
 
 	-- ============================================
-	-- WAVE PREVIEW UI
+	-- WAVE PREVIEW UI (Compact, top-left corner)
 	-- Shows incoming wave composition before spawn
 	-- ============================================
 	local wavePreviewFrame = Instance.new("Frame")
 	wavePreviewFrame.Name = "WavePreviewFrame"
-	wavePreviewFrame.Size = UDim2.new(0.4, 0, 0.35, 0)
-	wavePreviewFrame.Position = UDim2.new(0.3, 0, 0.3, 0)
+	wavePreviewFrame.Size = UDim2.new(0, 280, 0, 140)
+	wavePreviewFrame.Position = UDim2.new(0, 10, 0, 80)
 	wavePreviewFrame.BackgroundColor3 = Color3.new(0.08, 0.08, 0.12)
-	wavePreviewFrame.BackgroundTransparency = 0.05
+	wavePreviewFrame.BackgroundTransparency = 0.15
 	wavePreviewFrame.BorderSizePixel = 0
 	wavePreviewFrame.Visible = false
 	wavePreviewFrame.Parent = screenGui
 
 	local previewCorner = Instance.new("UICorner")
-	previewCorner.CornerRadius = UDim.new(0, 12)
+	previewCorner.CornerRadius = UDim.new(0, 8)
 	previewCorner.Parent = wavePreviewFrame
 
 	local previewStroke = Instance.new("UIStroke")
 	previewStroke.Color = Color3.new(1, 0.5, 0)
-	previewStroke.Thickness = 3
+	previewStroke.Thickness = 2
 	previewStroke.Parent = wavePreviewFrame
 
-	-- Wave title
+	-- Wave title (compact)
 	local waveTitle = Instance.new("TextLabel")
 	waveTitle.Name = "WaveTitle"
-	waveTitle.Size = UDim2.new(1, 0, 0.2, 0)
-	waveTitle.Position = UDim2.new(0, 0, 0.02, 0)
+	waveTitle.Size = UDim2.new(1, -10, 0, 24)
+	waveTitle.Position = UDim2.new(0, 5, 0, 5)
 	waveTitle.BackgroundTransparency = 1
 	waveTitle.Text = "WAVE 1 INCOMING"
 	waveTitle.TextColor3 = Color3.new(1, 0.7, 0.3)
-	waveTitle.Font = Enum.Font.GothamBlack
-	waveTitle.TextScaled = true
+	waveTitle.Font = Enum.Font.GothamBold
+	waveTitle.TextSize = 16
+	waveTitle.TextXAlignment = Enum.TextXAlignment.Left
 	waveTitle.Parent = wavePreviewFrame
 
-	-- Kodo composition container
-	local compositionFrame = Instance.new("Frame")
+	-- Countdown on same line as title (right side)
+	local countdownLabel = Instance.new("TextLabel")
+	countdownLabel.Name = "CountdownLabel"
+	countdownLabel.Size = UDim2.new(0, 60, 0, 24)
+	countdownLabel.Position = UDim2.new(1, -65, 0, 5)
+	countdownLabel.BackgroundTransparency = 1
+	countdownLabel.Text = "5s"
+	countdownLabel.TextColor3 = Color3.new(1, 1, 0)
+	countdownLabel.Font = Enum.Font.GothamBold
+	countdownLabel.TextSize = 16
+	countdownLabel.TextXAlignment = Enum.TextXAlignment.Right
+	countdownLabel.Parent = wavePreviewFrame
+
+	-- Kodo composition container (scrollable if needed)
+	local compositionFrame = Instance.new("ScrollingFrame")
 	compositionFrame.Name = "CompositionFrame"
-	compositionFrame.Size = UDim2.new(0.9, 0, 0.55, 0)
-	compositionFrame.Position = UDim2.new(0.05, 0, 0.22, 0)
+	compositionFrame.Size = UDim2.new(1, -10, 0, 100)
+	compositionFrame.Position = UDim2.new(0, 5, 0, 32)
 	compositionFrame.BackgroundTransparency = 1
+	compositionFrame.BorderSizePixel = 0
+	compositionFrame.ScrollBarThickness = 3
+	compositionFrame.ScrollBarImageColor3 = Color3.new(0.5, 0.5, 0.5)
+	compositionFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	compositionFrame.Parent = wavePreviewFrame
 
 	local compositionLayout = Instance.new("UIListLayout")
 	compositionLayout.FillDirection = Enum.FillDirection.Vertical
-	compositionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	compositionLayout.Padding = UDim.new(0, 4)
+	compositionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	compositionLayout.Padding = UDim.new(0, 2)
 	compositionLayout.Parent = compositionFrame
-
-	-- Countdown label
-	local countdownLabel = Instance.new("TextLabel")
-	countdownLabel.Name = "CountdownLabel"
-	countdownLabel.Size = UDim2.new(1, 0, 0.15, 0)
-	countdownLabel.Position = UDim2.new(0, 0, 0.82, 0)
-	countdownLabel.BackgroundTransparency = 1
-	countdownLabel.Text = "Spawning in 5..."
-	countdownLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-	countdownLabel.Font = Enum.Font.Gotham
-	countdownLabel.TextScaled = true
-	countdownLabel.Parent = wavePreviewFrame
 
 	-- Kodo type colors
 	local KODO_TYPE_COLORS = {
@@ -463,10 +469,10 @@ if isReservedServer then
 				end
 			end
 
-			-- Update title
-			local titleText = "WAVE " .. data.wave .. " INCOMING"
+			-- Update title (compact format)
+			local titleText = "Wave " .. data.wave
 			if data.waveType then
-				titleText = data.waveType .. " " .. titleText
+				titleText = data.waveType .. " - " .. titleText
 				if data.waveType == "BOSS" then
 					previewStroke.Color = Color3.new(1, 0, 0)
 					waveTitle.TextColor3 = Color3.new(1, 0.3, 0.3)
@@ -483,74 +489,86 @@ if isReservedServer then
 			end
 			waveTitle.Text = titleText
 
-			-- Create composition entries
+			-- Track total height for canvas size
+			local totalHeight = 0
+
+			-- Create compact composition entries
 			for _, entry in ipairs(data.composition) do
 				local entryFrame = Instance.new("Frame")
 				entryFrame.Name = entry.type .. "Entry"
-				entryFrame.Size = UDim2.new(1, 0, 0, 28)
+				entryFrame.Size = UDim2.new(1, -6, 0, 20)
 				entryFrame.BackgroundColor3 = KODO_TYPE_COLORS[entry.type] or Color3.new(0.5, 0.5, 0.5)
-				entryFrame.BackgroundTransparency = 0.7
+				entryFrame.BackgroundTransparency = 0.75
 				entryFrame.Parent = compositionFrame
 
 				local entryCorner = Instance.new("UICorner")
-				entryCorner.CornerRadius = UDim.new(0, 6)
+				entryCorner.CornerRadius = UDim.new(0, 4)
 				entryCorner.Parent = entryFrame
 
-				-- Kodo type name and count
+				-- Kodo type name and count (compact)
 				local typeLabel = Instance.new("TextLabel")
-				typeLabel.Size = UDim2.new(0.5, 0, 1, 0)
-				typeLabel.Position = UDim2.new(0.02, 0, 0, 0)
+				typeLabel.Size = UDim2.new(0.45, 0, 1, 0)
+				typeLabel.Position = UDim2.new(0, 5, 0, 0)
 				typeLabel.BackgroundTransparency = 1
 				typeLabel.Text = entry.count .. "x " .. entry.type
 				typeLabel.TextColor3 = KODO_TYPE_COLORS[entry.type] or Color3.new(1, 1, 1)
 				typeLabel.Font = Enum.Font.GothamBold
-				typeLabel.TextSize = 16
+				typeLabel.TextSize = 12
 				typeLabel.TextXAlignment = Enum.TextXAlignment.Left
 				typeLabel.Parent = entryFrame
 
-				-- Weakness tip
+				-- Weakness tip (compact)
 				local tipLabel = Instance.new("TextLabel")
-				tipLabel.Size = UDim2.new(0.46, 0, 1, 0)
-				tipLabel.Position = UDim2.new(0.52, 0, 0, 0)
+				tipLabel.Size = UDim2.new(0.52, 0, 1, 0)
+				tipLabel.Position = UDim2.new(0.45, 0, 0, 0)
 				tipLabel.BackgroundTransparency = 1
 				tipLabel.Text = KODO_TYPE_TIPS[entry.type] or ""
-				tipLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+				tipLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
 				tipLabel.Font = Enum.Font.Gotham
-				tipLabel.TextSize = 12
+				tipLabel.TextSize = 10
 				tipLabel.TextXAlignment = Enum.TextXAlignment.Right
 				tipLabel.Parent = entryFrame
+
+				totalHeight = totalHeight + 22
 			end
 
-			-- Add boss indicator if boss wave
+			-- Add boss indicator if boss wave (compact)
 			if data.isBossWave then
 				local bossEntry = Instance.new("Frame")
 				bossEntry.Name = "BossEntry"
-				bossEntry.Size = UDim2.new(1, 0, 0, 32)
+				bossEntry.Size = UDim2.new(1, -6, 0, 20)
 				bossEntry.BackgroundColor3 = Color3.new(0.6, 0, 0)
-				bossEntry.BackgroundTransparency = 0.5
+				bossEntry.BackgroundTransparency = 0.6
 				bossEntry.Parent = compositionFrame
 
 				local bossCorner = Instance.new("UICorner")
-				bossCorner.CornerRadius = UDim.new(0, 6)
+				bossCorner.CornerRadius = UDim.new(0, 4)
 				bossCorner.Parent = bossEntry
 
 				local bossLabel = Instance.new("TextLabel")
-				bossLabel.Size = UDim2.new(1, 0, 1, 0)
+				bossLabel.Size = UDim2.new(1, -10, 1, 0)
+				bossLabel.Position = UDim2.new(0, 5, 0, 0)
 				bossLabel.BackgroundTransparency = 1
-				bossLabel.Text = "+ BOSS KODO (5x Health)"
+				bossLabel.Text = "+ BOSS (5x HP)"
 				bossLabel.TextColor3 = Color3.new(1, 0.3, 0.3)
-				bossLabel.Font = Enum.Font.GothamBlack
-				bossLabel.TextSize = 16
+				bossLabel.Font = Enum.Font.GothamBold
+				bossLabel.TextSize = 12
+				bossLabel.TextXAlignment = Enum.TextXAlignment.Left
 				bossLabel.Parent = bossEntry
+
+				totalHeight = totalHeight + 22
 			end
+
+			-- Update canvas size
+			compositionFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
 
 			-- Show preview
 			wavePreviewFrame.Visible = true
 
-			-- Countdown
+			-- Countdown (compact format)
 			local previewTime = data.previewTime or 5
 			for i = previewTime, 1, -1 do
-				countdownLabel.Text = "Spawning in " .. i .. "..."
+				countdownLabel.Text = i .. "s"
 				task.wait(1)
 			end
 			countdownLabel.Text = "GO!"
