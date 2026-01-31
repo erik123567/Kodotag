@@ -3,7 +3,29 @@
     "allow": [
       "Bash(dir:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd workshop requirement for higher-tier turrets\n\nSlowTurret, FrostTurret, PoisonTurret, and MultiShotTurret now\nrequire a completed workshop before players can build them.\nBasic turrets \\(Turret, FastTurret, CannonTurret\\) remain available\nwithout a workshop.\n\n- Server validates workshop ownership before allowing placement\n- Client shows locked status and requirements in build menu UI\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd workshop requirement for higher-tier turrets\n\nSlowTurret, FrostTurret, PoisonTurret, and MultiShotTurret now\nrequire a completed workshop before players can build them.\nBasic turrets \\(Turret, FastTurret, CannonTurret\\) remain available\nwithout a workshop.\n\n- Server validates workshop ownership before allowing placement\n- Client shows locked status and requirements in build menu UI\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd remaining game files\n\nIncludes server scripts, client UI, and project configuration.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(xxd:*)",
+      "Bash(luac:*)",
+      "Bash(git -C D:/Kodotag diff --stat HEAD)",
+      "Bash(git -C D:/Kodotag diff HEAD -- src/ServerScriptService/RoundManager.server.lua)",
+      "Bash(git -C D:/Kodotag diff HEAD -- src/StarterGui/GameUI/NotificationHandler.client.lua)",
+      "WebSearch",
+      "WebFetch(domain:gaming-tools.com)",
+      "WebFetch(domain:wc3maps.com)",
+      "Bash(git -C D:/Kodotag status)",
+      "Bash(git -C D:/Kodotag log --oneline -5)",
+      "Bash(git -C D:/Kodotag add CLAUDE.md src/ServerScriptService/PadManager.server.lua src/ServerScriptService/GameInitializer.server.lua src/ServerScriptService/RoundManager.server.lua src/StarterGui/GameUI/NotificationHandler.client.lua src/ServerScriptService/BuildingManager.server.lua src/ServerScriptService/GoldMineManager.server.lua src/ServerScriptService/ResurrectionShrine.server.lua src/ServerScriptService/SellSystemServer.server.lua src/ServerScriptService/StructureHealthBars.server.lua src/ServerScriptService/TurretManager.server.lua src/ServerScriptService/UpgradeManager.server.lua src/StarterGui/GoldDisplayGui/GoldDisplayUpdater.client.lua src/StarterGui/GoldDisplayGui/MiningSystem.client.lua src/StarterGui/GoldDisplayGui/PlacementSystem.client.lua src/StarterGui/SellSystemGui/SellSystem.client.lua src/StarterGui/WorkshopGui/Workshop.client.lua)",
+      "Bash(git -C D:/Kodotag commit -m \"$\\(cat <<''EOF''\nAdd lobby/game server architecture with PadManager\n\n- Add PadManager for lobby game pads \\(SOLO, SMALL, MEDIUM, LARGE\\)\n- Implement reserved server teleportation for game instances\n- Add game over screen with player stats and return to lobby\n- Add CLAUDE.md with project context and WC3 Kodo Tag reference\n- Add reserved server checks to all game scripts\n- GameInitializer handles teleport data and player ready signaling\n- RoundManager waits for players before starting game loop\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C D:/Kodotag add src/ServerScriptService/RoundManager.server.lua src/StarterGui/GameUI/NotificationHandler.client.lua)",
+      "Bash(git -C D:/Kodotag commit -m \"$\\(cat <<''EOF''\nAdd saves stat to game over screen\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C D:/Kodotag add:*)",
+      "Bash(git -C D:/Kodotag commit -m \"$\\(cat <<''EOF''\nAdd lobby pad UI and improve sell system\n\nLobby Pad UI:\n- New PlayerPadStatus event for player-specific pad notifications\n- Panel appears at bottom center when standing on a pad\n- Shows game mode, player count, and status \\(countdown/instructions\\)\n- Color-coded border per game mode \\(solo=green, small=blue, etc.\\)\n\nSell System Overhaul:\n- New \"Sell Mode\" toggle button \\(bottom left\\) or press X\n- Buildings highlight orange when hovered in sell mode\n- Click building to open confirmation panel with sell value\n- Sell/Cancel buttons for confirmation\n- Escape key to cancel or exit sell mode\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C D:/Kodotag commit -m \"$\\(cat <<''EOF''\nAdd exponential difficulty scaling with special wave types\n\nDifficulty Scaling:\n- Exponential growth per wave \\(health +12%, damage +8%, count +15%\\)\n- Player count scaling \\(more players = more kodos, higher health\\)\n- Pad type multipliers \\(SOLO easier, LARGE harder\\)\n- Speed capped at 28 to remain fair\n\nSpecial Wave Types:\n- Boss waves \\(every 5\\): Powerful boss kodo with 5x health\n- Swarm waves \\(every 7\\): 3x kodos but 40% health, faster\n- Elite waves \\(every 10\\): Half kodos but 2.5x health, 2x gold\n\nWave announcements now show type and enemy count\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C D:/Kodotag commit:*)"
     ]
   }
 }

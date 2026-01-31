@@ -463,10 +463,11 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 	-- Create dynamic templates for items that don't have pre-made templates
 	if not template then
 		if itemName == "Barricade" then
-			-- Create Barricade template dynamically
+			-- Create Barricade template dynamically (small pillar for maze building)
+			-- 2x5x2 size creates 3-stud gaps on 5-stud grid - players fit, Kodos don't
 			template = Instance.new("Part")
 			template.Name = "Barricade"
-			template.Size = Vector3.new(4, 5, 4)
+			template.Size = Vector3.new(2, 5, 2)
 			template.Material = Enum.Material.Wood
 			template.BrickColor = BrickColor.new("Brown")
 			template.Anchored = true

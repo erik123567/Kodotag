@@ -145,11 +145,11 @@ local BUILDABLE_ITEMS = {
 		displayName = "Barricade",
 		cost = 15,
 		buildTime = 1,
-		size = Vector3.new(4, 5, 4),
+		size = Vector3.new(2, 5, 2),
 		category = "Maze",
 		stats = {
 			health = 75,
-			description = "Cheap maze obstacle. Small gaps let players through but block Kodos. Quick to place, easy to destroy."
+			description = "Maze pillar. 3-stud gaps let players kite through but Kodos can't fit. Spam these to build mazes!"
 		}
 	},
 	{
@@ -466,21 +466,22 @@ local function checkPlacementValid(position, size)
 
 			-- If placing a BARRICADE (maze building)
 			elseif selectedItem and selectedItem.category == "Maze" then
-				-- Barricades can be placed close together for maze building
-				-- Only block if directly overlapping (within 3 studs)
-				if isBarricade and dist < 3 then
+				-- Barricades are 2x2 pillars - allow close placement for maze building
+				-- Grid is 5 studs, so barricades 5 studs apart have 3-stud gaps (player fits, Kodo doesn't)
+				-- Block only if overlapping (within 2 studs center-to-center)
+				if isBarricade and dist < 2 then
 					return false
 				end
-				-- Block if wall is within 4 studs
-				if isWall and dist < 4 then
+				-- Block if wall is within 3 studs
+				if isWall and dist < 3 then
 					return false
 				end
-				-- Block if turret is within 3 studs
-				if isTurret and dist < 3 then
+				-- Block if turret is within 2 studs
+				if isTurret and dist < 2 then
 					return false
 				end
-				-- Block if farm is within 4 studs
-				if isFarm and dist < 4 then
+				-- Block if farm is within 3 studs
+				if isFarm and dist < 3 then
 					return false
 				end
 

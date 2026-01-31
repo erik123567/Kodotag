@@ -132,7 +132,7 @@ The core mechanic from original WC3 Kodo Tag - players build mazes to slow Kodos
 **Two Structure Types**:
 | Structure | Cost | Health | Size | Purpose |
 |-----------|------|--------|------|---------|
-| **Barricade** | 15g | 75 HP | 4x5x4 | Cheap maze building, quick 1s construction |
+| **Barricade** | 15g | 75 HP | 2x5x2 | Small pillar for mazes. 3-stud gaps let players kite through |
 | **Reinforced Wall** | 60g | 500 HP | 12x8x2 | Heavy defense, protects turrets |
 
 **Gap Mechanics**:
