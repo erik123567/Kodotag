@@ -34,6 +34,14 @@ if not soloStartEvent then
 	soloStartEvent.Parent = ReplicatedStorage
 end
 
+-- Event to notify specific player when they join/leave a pad
+local playerPadEvent = ReplicatedStorage:FindFirstChild("PlayerPadStatus")
+if not playerPadEvent then
+	playerPadEvent = Instance.new("RemoteEvent")
+	playerPadEvent.Name = "PlayerPadStatus"
+	playerPadEvent.Parent = ReplicatedStorage
+end
+
 -- Store state for each pad
 local padStates = {} -- [pad] = { playersInPad, isCountingDown, countdownTime, playerDebounce, config }
 
@@ -93,15 +101,26 @@ local function updateDisplay(pad)
 		end
 	end
 
-	-- Broadcast status to UI
-	updatePadStatus:FireAllClients({
+	-- Broadcast status to players on this pad
+	local padData = {
 		padType = config.padType,
 		count = playerCount,
 		maxPlayers = config.maxPlayers,
 		minPlayers = config.minPlayers,
 		isCountingDown = state.isCountingDown,
 		countdownTime = state.countdownTime
-	})
+	}
+	for player, _ in pairs(state.playersInPad) do
+		playerPadEvent:FireClient(player, {
+			joined = true,
+			padType = config.padType,
+			count = playerCount,
+			maxPlayers = config.maxPlayers,
+			minPlayers = config.minPlayers,
+			isCountingDown = state.isCountingDown,
+			countdownTime = state.countdownTime
+		})
+	end
 end
 
 -- Teleport players to reserved server
@@ -269,6 +288,17 @@ local function onPlayerEnter(pad, player)
 	print(player.Name .. " entered " .. config.padType:lower() .. " pad")
 	updateDisplay(pad)
 
+	-- Notify the player they joined this pad
+	playerPadEvent:FireClient(player, {
+		joined = true,
+		padType = config.padType,
+		count = currentCount + 1,
+		maxPlayers = config.maxPlayers,
+		minPlayers = config.minPlayers,
+		isCountingDown = state.isCountingDown,
+		countdownTime = state.countdownTime
+	})
+
 	-- Start countdown if enough players (multiplayer only)
 	if not config.isSolo then
 		if currentCount + 1 >= config.minPlayers and not state.isCountingDown then
@@ -293,6 +323,12 @@ local function onPlayerLeave(pad, player)
 	state.playerDebounce[player] = nil
 	print(player.Name .. " left " .. state.config.padType:lower() .. " pad")
 	updateDisplay(pad)
+
+	-- Notify the player they left this pad
+	playerPadEvent:FireClient(player, {
+		joined = false,
+		padType = state.config.padType
+	})
 
 	-- Cancel countdown if not enough players (multiplayer)
 	if not state.config.isSolo then

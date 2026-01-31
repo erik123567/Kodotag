@@ -1,3 +1,6 @@
+-- SELL SYSTEM UI
+-- Toggle sell mode, click buildings to sell them
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -15,7 +18,6 @@ local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
 -- Settings
-local HOLD_DURATION = 1
 local SELL_PERCENTAGE = 0.5
 local MAX_SELL_DISTANCE = 50
 
@@ -34,9 +36,10 @@ local ITEM_COSTS = {
 }
 
 -- State
-local isHoldingSellKey = false
+local sellModeActive = false
 local currentTarget = nil
-local holdStartTime = 0
+local highlightedBuilding = nil
+local highlightBox = nil
 
 -- Remote event
 local sellBuildingEvent = ReplicatedStorage:WaitForChild("SellBuilding", 10)
@@ -48,57 +51,143 @@ end
 
 -- UI Setup
 local screenGui = script.Parent
-local sellProgressFrame = Instance.new("Frame")
-sellProgressFrame.Name = "SellProgressFrame"
-sellProgressFrame.Size = UDim2.new(0, 200, 0, 40)
-sellProgressFrame.Position = UDim2.new(0.5, -100, 0.7, 0)
-sellProgressFrame.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-sellProgressFrame.BorderSizePixel = 2
-sellProgressFrame.BorderColor3 = Color3.new(1, 1, 1)
-sellProgressFrame.Visible = false
-sellProgressFrame.Parent = screenGui
 
-local progressBar = Instance.new("Frame")
-progressBar.Name = "ProgressBar"
-progressBar.Size = UDim2.new(0, 0, 1, 0)
-progressBar.BackgroundColor3 = Color3.new(1, 0.5, 0)
-progressBar.BorderSizePixel = 0
-progressBar.Parent = sellProgressFrame
+-- Sell Mode Toggle Button (bottom left)
+local sellModeButton = Instance.new("TextButton")
+sellModeButton.Name = "SellModeButton"
+sellModeButton.Size = UDim2.new(0, 120, 0, 40)
+sellModeButton.Position = UDim2.new(0, 20, 1, -60)
+sellModeButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.35)
+sellModeButton.Text = "Sell Mode"
+sellModeButton.TextColor3 = Color3.new(1, 1, 1)
+sellModeButton.Font = Enum.Font.GothamBold
+sellModeButton.TextSize = 16
+sellModeButton.Parent = screenGui
 
-local sellText = Instance.new("TextLabel")
-sellText.Name = "SellText"
-sellText.Size = UDim2.new(1, 0, 1, 0)
-sellText.BackgroundTransparency = 1
-sellText.Text = "Selling... +0 Gold"
-sellText.TextColor3 = Color3.new(1, 1, 1)
-sellText.TextScaled = true
-sellText.Font = Enum.Font.GothamBold
-sellText.TextStrokeTransparency = 0.5
-sellText.Parent = sellProgressFrame
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 8)
+buttonCorner.Parent = sellModeButton
+
+local buttonStroke = Instance.new("UIStroke")
+buttonStroke.Color = Color3.new(0.5, 0.5, 0.5)
+buttonStroke.Thickness = 2
+buttonStroke.Parent = sellModeButton
+
+-- Sell Confirmation Panel (appears when clicking a building)
+local sellPanel = Instance.new("Frame")
+sellPanel.Name = "SellPanel"
+sellPanel.Size = UDim2.new(0, 220, 0, 120)
+sellPanel.Position = UDim2.new(0.5, -110, 0.5, -60)
+sellPanel.BackgroundColor3 = Color3.new(0.15, 0.15, 0.2)
+sellPanel.BorderSizePixel = 0
+sellPanel.Visible = false
+sellPanel.Parent = screenGui
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 10)
+panelCorner.Parent = sellPanel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = Color3.new(1, 0.5, 0)
+panelStroke.Thickness = 2
+panelStroke.Parent = sellPanel
+
+-- Panel title
+local panelTitle = Instance.new("TextLabel")
+panelTitle.Name = "Title"
+panelTitle.Size = UDim2.new(1, 0, 0, 30)
+panelTitle.Position = UDim2.new(0, 0, 0, 5)
+panelTitle.BackgroundTransparency = 1
+panelTitle.Text = "Sell Building"
+panelTitle.TextColor3 = Color3.new(1, 0.7, 0.3)
+panelTitle.Font = Enum.Font.GothamBold
+panelTitle.TextSize = 18
+panelTitle.Parent = sellPanel
+
+-- Building name label
+local buildingLabel = Instance.new("TextLabel")
+buildingLabel.Name = "BuildingLabel"
+buildingLabel.Size = UDim2.new(1, 0, 0, 25)
+buildingLabel.Position = UDim2.new(0, 0, 0, 35)
+buildingLabel.BackgroundTransparency = 1
+buildingLabel.Text = "Turret"
+buildingLabel.TextColor3 = Color3.new(1, 1, 1)
+buildingLabel.Font = Enum.Font.Gotham
+buildingLabel.TextSize = 16
+buildingLabel.Parent = sellPanel
+
+-- Sell value label
+local valueLabel = Instance.new("TextLabel")
+valueLabel.Name = "ValueLabel"
+valueLabel.Size = UDim2.new(1, 0, 0, 25)
+valueLabel.Position = UDim2.new(0, 0, 0, 55)
+valueLabel.BackgroundTransparency = 1
+valueLabel.Text = "+25 Gold"
+valueLabel.TextColor3 = Color3.new(1, 0.85, 0)
+valueLabel.Font = Enum.Font.GothamBold
+valueLabel.TextSize = 18
+valueLabel.Parent = sellPanel
+
+-- Buttons container
+local buttonsFrame = Instance.new("Frame")
+buttonsFrame.Size = UDim2.new(1, -20, 0, 30)
+buttonsFrame.Position = UDim2.new(0, 10, 1, -40)
+buttonsFrame.BackgroundTransparency = 1
+buttonsFrame.Parent = sellPanel
+
+-- Confirm button
+local confirmButton = Instance.new("TextButton")
+confirmButton.Name = "ConfirmButton"
+confirmButton.Size = UDim2.new(0.48, 0, 1, 0)
+confirmButton.Position = UDim2.new(0, 0, 0, 0)
+confirmButton.BackgroundColor3 = Color3.new(0.2, 0.6, 0.2)
+confirmButton.Text = "Sell"
+confirmButton.TextColor3 = Color3.new(1, 1, 1)
+confirmButton.Font = Enum.Font.GothamBold
+confirmButton.TextSize = 14
+confirmButton.Parent = buttonsFrame
+
+local confirmCorner = Instance.new("UICorner")
+confirmCorner.CornerRadius = UDim.new(0, 6)
+confirmCorner.Parent = confirmButton
+
+-- Cancel button
+local cancelButton = Instance.new("TextButton")
+cancelButton.Name = "CancelButton"
+cancelButton.Size = UDim2.new(0.48, 0, 1, 0)
+cancelButton.Position = UDim2.new(0.52, 0, 0, 0)
+cancelButton.BackgroundColor3 = Color3.new(0.5, 0.3, 0.3)
+cancelButton.Text = "Cancel"
+cancelButton.TextColor3 = Color3.new(1, 1, 1)
+cancelButton.Font = Enum.Font.GothamBold
+cancelButton.TextSize = 14
+cancelButton.Parent = buttonsFrame
+
+local cancelCorner = Instance.new("UICorner")
+cancelCorner.CornerRadius = UDim.new(0, 6)
+cancelCorner.Parent = cancelButton
 
 -- Helper: Get building under mouse
 local function getBuildingUnderMouse()
-	local mouseRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
+	local mousePos = UserInputService:GetMouseLocation()
+	local ray = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+
 	local raycastParams = RaycastParams.new()
 	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	raycastParams.FilterDescendantsInstances = {player.Character}
 
-	local result = workspace:Raycast(mouseRay.Origin, mouseRay.Direction * MAX_SELL_DISTANCE, raycastParams)
+	local result = workspace:Raycast(ray.Origin, ray.Direction * MAX_SELL_DISTANCE, raycastParams)
 
 	if result then
 		local hit = result.Instance
-		local building = hit.Parent
 
-		-- Check if it's a valid building
-		local validNames = {
-			Wall = true, Turret = true, FastTurret = true, SlowTurret = true,
-			FrostTurret = true, PoisonTurret = true, MultiShotTurret = true, CannonTurret = true,
-			Farm = true, Workshop = true
-		}
-		if validNames[building.Name] then
-			return building
-		elseif validNames[hit.Name] then
-			return hit
+		-- Check the hit part and its ancestors for valid building names
+		local current = hit
+		while current and current ~= workspace do
+			if ITEM_COSTS[current.Name] then
+				return current
+			end
+			current = current.Parent
 		end
 	end
 
@@ -112,88 +201,131 @@ local function getSellValue(building)
 	return math.floor(originalCost * SELL_PERCENTAGE)
 end
 
--- Helper: Update progress bar
-local function updateProgressBar(progress, building)
-	if not sellProgressFrame.Visible then
-		sellProgressFrame.Visible = true
+-- Helper: Create highlight box around building
+local function createHighlight(building)
+	removeHighlight()
+
+	local highlight = Instance.new("SelectionBox")
+	highlight.Name = "SellHighlight"
+	highlight.Color3 = Color3.new(1, 0.5, 0)
+	highlight.LineThickness = 0.05
+	highlight.SurfaceTransparency = 0.8
+	highlight.SurfaceColor3 = Color3.new(1, 0.3, 0)
+	highlight.Adornee = building
+	highlight.Parent = building
+
+	highlightBox = highlight
+	highlightedBuilding = building
+end
+
+-- Helper: Remove highlight
+function removeHighlight()
+	if highlightBox then
+		highlightBox:Destroy()
+		highlightBox = nil
 	end
-
-	local sellValue = getSellValue(building)
-	progressBar.Size = UDim2.new(progress, 0, 1, 0)
-	sellText.Text = "Selling... +" .. sellValue .. " Gold"
+	highlightedBuilding = nil
 end
 
--- Helper: Hide progress bar
-local function hideProgressBar()
-	sellProgressFrame.Visible = false
-	progressBar.Size = UDim2.new(0, 0, 1, 0)
-end
-
--- Main update loop
-RunService.RenderStepped:Connect(function()
-	if isHoldingSellKey then
-		local building = getBuildingUnderMouse()
-
-		if building and building == currentTarget then
-			-- Still holding on same building
-			local holdDuration = tick() - holdStartTime
-			local progress = math.min(holdDuration / HOLD_DURATION, 1)
-
-			updateProgressBar(progress, building)
-
-			-- Completed hold
-			if progress >= 1 then
-				print("SellSystem: Selling", building.Name)
-				sellBuildingEvent:FireServer(building)
-
-				-- Reset
-				isHoldingSellKey = false
-				currentTarget = nil
-				hideProgressBar()
-			end
-		else
-			-- Changed target or no target
-			if building ~= currentTarget then
-				-- Reset if changed target
-				currentTarget = building
-				holdStartTime = tick()
-
-				if building then
-					updateProgressBar(0, building)
-				else
-					hideProgressBar()
-				end
-			end
-		end
+-- Helper: Update sell mode button appearance
+local function updateSellModeButton()
+	if sellModeActive then
+		sellModeButton.BackgroundColor3 = Color3.new(0.8, 0.4, 0.1)
+		sellModeButton.Text = "EXIT SELL"
+		buttonStroke.Color = Color3.new(1, 0.6, 0.2)
 	else
-		-- Not holding key
-		hideProgressBar()
-		currentTarget = nil
+		sellModeButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.35)
+		sellModeButton.Text = "Sell Mode"
+		buttonStroke.Color = Color3.new(0.5, 0.5, 0.5)
 	end
-end)
+end
 
--- Input handling
+-- Helper: Show sell panel for a building
+local function showSellPanel(building)
+	currentTarget = building
+	buildingLabel.Text = building.Name
+	valueLabel.Text = "+" .. getSellValue(building) .. " Gold"
+	sellPanel.Visible = true
+end
+
+-- Helper: Hide sell panel
+local function hideSellPanel()
+	sellPanel.Visible = false
+	currentTarget = nil
+end
+
+-- Toggle sell mode
+local function toggleSellMode()
+	sellModeActive = not sellModeActive
+	updateSellModeButton()
+
+	if not sellModeActive then
+		removeHighlight()
+		hideSellPanel()
+	end
+
+	print("SellSystem: Sell mode", sellModeActive and "ENABLED" or "DISABLED")
+end
+
+-- Sell the current target
+local function sellCurrentTarget()
+	if currentTarget and currentTarget.Parent then
+		print("SellSystem: Selling", currentTarget.Name)
+		sellBuildingEvent:FireServer(currentTarget)
+		removeHighlight()
+		hideSellPanel()
+	end
+end
+
+-- Button events
+sellModeButton.MouseButton1Click:Connect(toggleSellMode)
+confirmButton.MouseButton1Click:Connect(sellCurrentTarget)
+cancelButton.MouseButton1Click:Connect(hideSellPanel)
+
+-- Keyboard shortcut: X to toggle sell mode
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
-	if input.KeyCode == Enum.KeyCode.E then
-		local building = getBuildingUnderMouse()
-
-		if building then
-			isHoldingSellKey = true
-			currentTarget = building
-			holdStartTime = tick()
-			print("SellSystem: Started holding E on", building.Name)
+	if input.KeyCode == Enum.KeyCode.X then
+		toggleSellMode()
+	elseif input.KeyCode == Enum.KeyCode.Escape then
+		if sellPanel.Visible then
+			hideSellPanel()
+		elseif sellModeActive then
+			toggleSellMode()
 		end
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input, gameProcessed)
-	if input.KeyCode == Enum.KeyCode.E then
-		isHoldingSellKey = false
-		hideProgressBar()
-		print("SellSystem: Released E")
+-- Mouse click handling in sell mode
+mouse.Button1Down:Connect(function()
+	if not sellModeActive then return end
+	if sellPanel.Visible then return end -- Don't process if panel is open
+
+	local building = getBuildingUnderMouse()
+	if building then
+		showSellPanel(building)
 	end
 end)
 
-print("SellSystem: Loaded - Hold E to sell buildings for 50% value")
+-- Update loop: highlight buildings when in sell mode
+RunService.RenderStepped:Connect(function()
+	if not sellModeActive or sellPanel.Visible then
+		if highlightedBuilding and not sellPanel.Visible then
+			removeHighlight()
+		end
+		return
+	end
+
+	local building = getBuildingUnderMouse()
+
+	if building then
+		if building ~= highlightedBuilding then
+			createHighlight(building)
+		end
+	else
+		removeHighlight()
+	end
+end)
+
+print("SellSystem: Loaded - Press X or click button to toggle sell mode")
