@@ -170,6 +170,13 @@ local showGameOver = Instance.new("RemoteEvent")
 showGameOver.Name = "ShowGameOver"
 showGameOver.Parent = ReplicatedStorage
 
+local showWavePreview = Instance.new("RemoteEvent")
+showWavePreview.Name = "ShowWavePreview"
+showWavePreview.Parent = ReplicatedStorage
+
+-- Wave preview timing
+local WAVE_PREVIEW_TIME = 5 -- Seconds to show preview before spawning
+
 -- Return all players to lobby
 local function returnToLobby()
 	print("Returning all players to lobby in " .. RETURN_TO_LOBBY_DELAY .. " seconds...")
@@ -476,8 +483,38 @@ local function spawnKodoWave()
 	kodoDamage = math.max(10, kodoDamage)
 	kodoSpeed = math.max(10, kodoSpeed)
 
+	-- Pre-calculate Kodo types for this wave (store in list for spawning)
+	local kodoTypesToSpawn = {}
+	local waveComposition = {}
+	for i = 1, kodoCount do
+		local kodoType = getKodoTypeForWave(currentWave, isSwarmWave)
+		table.insert(kodoTypesToSpawn, kodoType)
+		waveComposition[kodoType] = (waveComposition[kodoType] or 0) + 1
+	end
+
+	-- Build composition summary for preview
+	local compositionList = {}
+	for kodoType, count in pairs(waveComposition) do
+		table.insert(compositionList, {type = kodoType, count = count})
+	end
+	-- Sort by count descending
+	table.sort(compositionList, function(a, b) return a.count > b.count end)
+
 	print("Spawning " .. waveTypeText .. "wave " .. currentWave .. " with " .. kodoCount .. " Kodos (HP:" .. kodoHealth .. " DMG:" .. kodoDamage .. " Speed:" .. string.format("%.1f", kodoSpeed) .. ")")
-	showNotification:FireAllClients(waveTypeText .. "Wave " .. currentWave .. " - " .. kodoCount .. " Kodos!", waveColor)
+
+	-- Send wave preview to all clients
+	showWavePreview:FireAllClients({
+		wave = currentWave,
+		waveType = waveTypeText ~= "" and waveTypeText:gsub(" ", "") or nil, -- "BOSS", "SWARM", "ELITE", or nil
+		totalCount = kodoCount,
+		composition = compositionList,
+		health = kodoHealth,
+		previewTime = WAVE_PREVIEW_TIME,
+		isBossWave = isBossWave
+	})
+
+	-- Wait for preview time
+	task.wait(WAVE_PREVIEW_TIME)
 
 	-- Helper function to connect kodo death event
 	local function connectKodoDeath(kodo, isBoss, kodoGoldMult)
@@ -544,8 +581,8 @@ local function spawnKodoWave()
 		end
 
 		if kodoSpawn then
-			-- Determine kodo type for this spawn
-			local kodoType = getKodoTypeForWave(currentWave, isSwarmWave)
+			-- Use pre-calculated kodo type for this spawn
+			local kodoType = kodoTypesToSpawn[i] or "Normal"
 			local kodo = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, kodoSpeed, kodoHealth, kodoDamage, false, kodoType)
 
 			if kodo then

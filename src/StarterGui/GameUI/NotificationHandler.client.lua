@@ -369,6 +369,198 @@ if isReservedServer then
 		notificationText.Visible = false
 	end)
 
+	-- ============================================
+	-- WAVE PREVIEW UI
+	-- Shows incoming wave composition before spawn
+	-- ============================================
+	local wavePreviewFrame = Instance.new("Frame")
+	wavePreviewFrame.Name = "WavePreviewFrame"
+	wavePreviewFrame.Size = UDim2.new(0.4, 0, 0.35, 0)
+	wavePreviewFrame.Position = UDim2.new(0.3, 0, 0.3, 0)
+	wavePreviewFrame.BackgroundColor3 = Color3.new(0.08, 0.08, 0.12)
+	wavePreviewFrame.BackgroundTransparency = 0.05
+	wavePreviewFrame.BorderSizePixel = 0
+	wavePreviewFrame.Visible = false
+	wavePreviewFrame.Parent = screenGui
+
+	local previewCorner = Instance.new("UICorner")
+	previewCorner.CornerRadius = UDim.new(0, 12)
+	previewCorner.Parent = wavePreviewFrame
+
+	local previewStroke = Instance.new("UIStroke")
+	previewStroke.Color = Color3.new(1, 0.5, 0)
+	previewStroke.Thickness = 3
+	previewStroke.Parent = wavePreviewFrame
+
+	-- Wave title
+	local waveTitle = Instance.new("TextLabel")
+	waveTitle.Name = "WaveTitle"
+	waveTitle.Size = UDim2.new(1, 0, 0.2, 0)
+	waveTitle.Position = UDim2.new(0, 0, 0.02, 0)
+	waveTitle.BackgroundTransparency = 1
+	waveTitle.Text = "WAVE 1 INCOMING"
+	waveTitle.TextColor3 = Color3.new(1, 0.7, 0.3)
+	waveTitle.Font = Enum.Font.GothamBlack
+	waveTitle.TextScaled = true
+	waveTitle.Parent = wavePreviewFrame
+
+	-- Kodo composition container
+	local compositionFrame = Instance.new("Frame")
+	compositionFrame.Name = "CompositionFrame"
+	compositionFrame.Size = UDim2.new(0.9, 0, 0.55, 0)
+	compositionFrame.Position = UDim2.new(0.05, 0, 0.22, 0)
+	compositionFrame.BackgroundTransparency = 1
+	compositionFrame.Parent = wavePreviewFrame
+
+	local compositionLayout = Instance.new("UIListLayout")
+	compositionLayout.FillDirection = Enum.FillDirection.Vertical
+	compositionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	compositionLayout.Padding = UDim.new(0, 4)
+	compositionLayout.Parent = compositionFrame
+
+	-- Countdown label
+	local countdownLabel = Instance.new("TextLabel")
+	countdownLabel.Name = "CountdownLabel"
+	countdownLabel.Size = UDim2.new(1, 0, 0.15, 0)
+	countdownLabel.Position = UDim2.new(0, 0, 0.82, 0)
+	countdownLabel.BackgroundTransparency = 1
+	countdownLabel.Text = "Spawning in 5..."
+	countdownLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+	countdownLabel.Font = Enum.Font.Gotham
+	countdownLabel.TextScaled = true
+	countdownLabel.Parent = wavePreviewFrame
+
+	-- Kodo type colors
+	local KODO_TYPE_COLORS = {
+		Normal = Color3.fromRGB(180, 140, 100),
+		Armored = Color3.fromRGB(140, 140, 160),
+		Swift = Color3.fromRGB(220, 220, 240),
+		Frostborn = Color3.fromRGB(100, 180, 255),
+		Venomous = Color3.fromRGB(80, 200, 80),
+		Horde = Color3.fromRGB(200, 80, 80)
+	}
+
+	-- Kodo type weaknesses for tips
+	local KODO_TYPE_TIPS = {
+		Normal = "No special resistances",
+		Armored = "Weak to: Poison, AOE",
+		Swift = "Weak to: Frost (slows)",
+		Frostborn = "Weak to: Physical damage",
+		Venomous = "Weak to: Frost",
+		Horde = "Weak to: AOE, Multishot"
+	}
+
+	-- Listen for wave preview event
+	local showWavePreview = ReplicatedStorage:WaitForChild("ShowWavePreview", 10)
+	if showWavePreview then
+		showWavePreview.OnClientEvent:Connect(function(data)
+			print("Wave preview received - Wave", data.wave)
+
+			-- Clear previous composition entries
+			for _, child in ipairs(compositionFrame:GetChildren()) do
+				if child:IsA("Frame") then
+					child:Destroy()
+				end
+			end
+
+			-- Update title
+			local titleText = "WAVE " .. data.wave .. " INCOMING"
+			if data.waveType then
+				titleText = data.waveType .. " " .. titleText
+				if data.waveType == "BOSS" then
+					previewStroke.Color = Color3.new(1, 0, 0)
+					waveTitle.TextColor3 = Color3.new(1, 0.3, 0.3)
+				elseif data.waveType == "SWARM" then
+					previewStroke.Color = Color3.new(1, 1, 0)
+					waveTitle.TextColor3 = Color3.new(1, 1, 0.5)
+				elseif data.waveType == "ELITE" then
+					previewStroke.Color = Color3.new(0.8, 0.3, 1)
+					waveTitle.TextColor3 = Color3.new(0.9, 0.5, 1)
+				end
+			else
+				previewStroke.Color = Color3.new(1, 0.5, 0)
+				waveTitle.TextColor3 = Color3.new(1, 0.7, 0.3)
+			end
+			waveTitle.Text = titleText
+
+			-- Create composition entries
+			for _, entry in ipairs(data.composition) do
+				local entryFrame = Instance.new("Frame")
+				entryFrame.Name = entry.type .. "Entry"
+				entryFrame.Size = UDim2.new(1, 0, 0, 28)
+				entryFrame.BackgroundColor3 = KODO_TYPE_COLORS[entry.type] or Color3.new(0.5, 0.5, 0.5)
+				entryFrame.BackgroundTransparency = 0.7
+				entryFrame.Parent = compositionFrame
+
+				local entryCorner = Instance.new("UICorner")
+				entryCorner.CornerRadius = UDim.new(0, 6)
+				entryCorner.Parent = entryFrame
+
+				-- Kodo type name and count
+				local typeLabel = Instance.new("TextLabel")
+				typeLabel.Size = UDim2.new(0.5, 0, 1, 0)
+				typeLabel.Position = UDim2.new(0.02, 0, 0, 0)
+				typeLabel.BackgroundTransparency = 1
+				typeLabel.Text = entry.count .. "x " .. entry.type
+				typeLabel.TextColor3 = KODO_TYPE_COLORS[entry.type] or Color3.new(1, 1, 1)
+				typeLabel.Font = Enum.Font.GothamBold
+				typeLabel.TextSize = 16
+				typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+				typeLabel.Parent = entryFrame
+
+				-- Weakness tip
+				local tipLabel = Instance.new("TextLabel")
+				tipLabel.Size = UDim2.new(0.46, 0, 1, 0)
+				tipLabel.Position = UDim2.new(0.52, 0, 0, 0)
+				tipLabel.BackgroundTransparency = 1
+				tipLabel.Text = KODO_TYPE_TIPS[entry.type] or ""
+				tipLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+				tipLabel.Font = Enum.Font.Gotham
+				tipLabel.TextSize = 12
+				tipLabel.TextXAlignment = Enum.TextXAlignment.Right
+				tipLabel.Parent = entryFrame
+			end
+
+			-- Add boss indicator if boss wave
+			if data.isBossWave then
+				local bossEntry = Instance.new("Frame")
+				bossEntry.Name = "BossEntry"
+				bossEntry.Size = UDim2.new(1, 0, 0, 32)
+				bossEntry.BackgroundColor3 = Color3.new(0.6, 0, 0)
+				bossEntry.BackgroundTransparency = 0.5
+				bossEntry.Parent = compositionFrame
+
+				local bossCorner = Instance.new("UICorner")
+				bossCorner.CornerRadius = UDim.new(0, 6)
+				bossCorner.Parent = bossEntry
+
+				local bossLabel = Instance.new("TextLabel")
+				bossLabel.Size = UDim2.new(1, 0, 1, 0)
+				bossLabel.BackgroundTransparency = 1
+				bossLabel.Text = "+ BOSS KODO (5x Health)"
+				bossLabel.TextColor3 = Color3.new(1, 0.3, 0.3)
+				bossLabel.Font = Enum.Font.GothamBlack
+				bossLabel.TextSize = 16
+				bossLabel.Parent = bossEntry
+			end
+
+			-- Show preview
+			wavePreviewFrame.Visible = true
+
+			-- Countdown
+			local previewTime = data.previewTime or 5
+			for i = previewTime, 1, -1 do
+				countdownLabel.Text = "Spawning in " .. i .. "..."
+				task.wait(1)
+			end
+			countdownLabel.Text = "GO!"
+			task.wait(0.5)
+
+			-- Hide preview
+			wavePreviewFrame.Visible = false
+		end)
+	end
+
 	-- Listen for game over event
 	local showGameOver = ReplicatedStorage:WaitForChild("ShowGameOver", 10)
 	if showGameOver then
