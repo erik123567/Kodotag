@@ -597,8 +597,8 @@ if isReservedServer then
 			-- Create game over screen
 			local gameOverScreen = Instance.new("Frame")
 			gameOverScreen.Name = "GameOverScreen"
-			gameOverScreen.Size = UDim2.new(0.5, 0, 0.6, 0)
-			gameOverScreen.Position = UDim2.new(0.25, 0, 0.2, 0)
+			gameOverScreen.Size = UDim2.new(0.55, 0, 0.7, 0)
+			gameOverScreen.Position = UDim2.new(0.225, 0, 0.15, 0)
 			gameOverScreen.BackgroundColor3 = Color3.new(0.1, 0.1, 0.15)
 			gameOverScreen.BackgroundTransparency = 0.1
 			gameOverScreen.BorderSizePixel = 0
@@ -615,54 +615,202 @@ if isReservedServer then
 
 			-- Title
 			local titleLabel = Instance.new("TextLabel")
-			titleLabel.Size = UDim2.new(1, 0, 0.15, 0)
-			titleLabel.Position = UDim2.new(0, 0, 0.02, 0)
+			titleLabel.Size = UDim2.new(1, 0, 0, 40)
+			titleLabel.Position = UDim2.new(0, 0, 0, 10)
 			titleLabel.BackgroundTransparency = 1
 			titleLabel.Text = "GAME OVER"
 			titleLabel.TextColor3 = Color3.new(1, 0.3, 0.3)
 			titleLabel.Font = Enum.Font.GothamBlack
-			titleLabel.TextScaled = true
+			titleLabel.TextSize = 32
 			titleLabel.Parent = gameOverScreen
 
 			-- Waves reached
 			local wavesLabel = Instance.new("TextLabel")
-			wavesLabel.Size = UDim2.new(1, 0, 0.12, 0)
-			wavesLabel.Position = UDim2.new(0, 0, 0.18, 0)
+			wavesLabel.Size = UDim2.new(1, 0, 0, 30)
+			wavesLabel.Position = UDim2.new(0, 0, 0, 55)
 			wavesLabel.BackgroundTransparency = 1
 			wavesLabel.Text = "Survived " .. (data.wavesReached or 1) .. " Waves"
 			wavesLabel.TextColor3 = Color3.new(1, 1, 0.5)
 			wavesLabel.Font = Enum.Font.GothamBold
-			wavesLabel.TextScaled = true
+			wavesLabel.TextSize = 24
 			wavesLabel.Parent = gameOverScreen
 
-			-- Stats section
-			local myStats = data.playerStats and data.playerStats[player.Name]
-			if myStats then
-				local statsLabel = Instance.new("TextLabel")
-				statsLabel.Size = UDim2.new(0.8, 0, 0.35, 0)
-				statsLabel.Position = UDim2.new(0.1, 0, 0.32, 0)
-				statsLabel.BackgroundColor3 = Color3.new(0.15, 0.15, 0.2)
-				statsLabel.BackgroundTransparency = 0.5
-				statsLabel.Text = "YOUR STATS\n\n" ..
-					"Kodo Kills: " .. (myStats.kodoKills or 0) .. "\n" ..
-					"Deaths: " .. (myStats.deaths or 0) .. "\n" ..
-					"Saves: " .. (myStats.saves or 0) .. "\n" ..
-					"Gold Earned: " .. (myStats.goldEarned or 0) .. "g"
-				statsLabel.TextColor3 = Color3.new(1, 1, 1)
-				statsLabel.Font = Enum.Font.Gotham
-				statsLabel.TextScaled = true
-				statsLabel.Parent = gameOverScreen
+			-- Leaderboard section
+			local leaderboardFrame = Instance.new("Frame")
+			leaderboardFrame.Name = "LeaderboardFrame"
+			leaderboardFrame.Size = UDim2.new(1, -20, 1, -140)
+			leaderboardFrame.Position = UDim2.new(0, 10, 0, 95)
+			leaderboardFrame.BackgroundColor3 = Color3.new(0.08, 0.08, 0.1)
+			leaderboardFrame.BackgroundTransparency = 0.3
+			leaderboardFrame.BorderSizePixel = 0
+			leaderboardFrame.Parent = gameOverScreen
 
-				local statsCorner = Instance.new("UICorner")
-				statsCorner.CornerRadius = UDim.new(0, 8)
-				statsCorner.Parent = statsLabel
+			local lbCorner = Instance.new("UICorner")
+			lbCorner.CornerRadius = UDim.new(0, 8)
+			lbCorner.Parent = leaderboardFrame
+
+			-- Leaderboard title
+			local lbTitle = Instance.new("TextLabel")
+			lbTitle.Size = UDim2.new(1, 0, 0, 25)
+			lbTitle.Position = UDim2.new(0, 0, 0, 5)
+			lbTitle.BackgroundTransparency = 1
+			lbTitle.Text = "LEADERBOARD"
+			lbTitle.TextColor3 = Color3.new(1, 0.85, 0.3)
+			lbTitle.Font = Enum.Font.GothamBold
+			lbTitle.TextSize = 18
+			lbTitle.Parent = leaderboardFrame
+
+			-- Column headers
+			local headerFrame = Instance.new("Frame")
+			headerFrame.Size = UDim2.new(1, -20, 0, 22)
+			headerFrame.Position = UDim2.new(0, 10, 0, 32)
+			headerFrame.BackgroundTransparency = 1
+			headerFrame.Parent = leaderboardFrame
+
+			local headers = {"#", "Player", "Kills", "Deaths", "Saves", "Gold"}
+			local headerWidths = {0.08, 0.32, 0.15, 0.15, 0.15, 0.15}
+			local xPos = 0
+			for i, headerText in ipairs(headers) do
+				local header = Instance.new("TextLabel")
+				header.Size = UDim2.new(headerWidths[i], 0, 1, 0)
+				header.Position = UDim2.new(xPos, 0, 0, 0)
+				header.BackgroundTransparency = 1
+				header.Text = headerText
+				header.TextColor3 = Color3.new(0.6, 0.6, 0.6)
+				header.Font = Enum.Font.GothamBold
+				header.TextSize = 12
+				header.TextXAlignment = i == 2 and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+				header.Parent = headerFrame
+				xPos = xPos + headerWidths[i]
 			end
+
+			-- Player rows (scrollable)
+			local playerList = Instance.new("ScrollingFrame")
+			playerList.Name = "PlayerList"
+			playerList.Size = UDim2.new(1, -20, 1, -62)
+			playerList.Position = UDim2.new(0, 10, 0, 56)
+			playerList.BackgroundTransparency = 1
+			playerList.BorderSizePixel = 0
+			playerList.ScrollBarThickness = 4
+			playerList.ScrollBarImageColor3 = Color3.new(0.5, 0.5, 0.5)
+			playerList.Parent = leaderboardFrame
+
+			local listLayout = Instance.new("UIListLayout")
+			listLayout.Padding = UDim.new(0, 4)
+			listLayout.Parent = playerList
+
+			-- Sort players by kills (descending)
+			local sortedPlayers = {}
+			if data.playerStats then
+				for playerName, stats in pairs(data.playerStats) do
+					table.insert(sortedPlayers, {name = playerName, stats = stats})
+				end
+				table.sort(sortedPlayers, function(a, b)
+					return (a.stats.kodoKills or 0) > (b.stats.kodoKills or 0)
+				end)
+			end
+
+			-- Create player rows
+			for rank, playerData in ipairs(sortedPlayers) do
+				local isLocalPlayer = (playerData.name == player.Name)
+				local stats = playerData.stats
+
+				local row = Instance.new("Frame")
+				row.Name = playerData.name
+				row.Size = UDim2.new(1, 0, 0, 32)
+				row.BackgroundColor3 = isLocalPlayer and Color3.new(0.2, 0.3, 0.15) or Color3.new(0.12, 0.12, 0.15)
+				row.BackgroundTransparency = 0.3
+				row.Parent = playerList
+
+				local rowCorner = Instance.new("UICorner")
+				rowCorner.CornerRadius = UDim.new(0, 6)
+				rowCorner.Parent = row
+
+				-- Highlight border for local player
+				if isLocalPlayer then
+					local rowStroke = Instance.new("UIStroke")
+					rowStroke.Color = Color3.new(0.5, 1, 0.5)
+					rowStroke.Thickness = 2
+					rowStroke.Parent = row
+				end
+
+				-- Rank
+				local rankLabel = Instance.new("TextLabel")
+				rankLabel.Size = UDim2.new(0.08, 0, 1, 0)
+				rankLabel.Position = UDim2.new(0, 0, 0, 0)
+				rankLabel.BackgroundTransparency = 1
+				rankLabel.Text = "#" .. rank
+				rankLabel.TextColor3 = rank == 1 and Color3.new(1, 0.85, 0) or Color3.new(0.8, 0.8, 0.8)
+				rankLabel.Font = Enum.Font.GothamBold
+				rankLabel.TextSize = 14
+				rankLabel.Parent = row
+
+				-- Player name
+				local nameLabel = Instance.new("TextLabel")
+				nameLabel.Size = UDim2.new(0.32, 0, 1, 0)
+				nameLabel.Position = UDim2.new(0.08, 0, 0, 0)
+				nameLabel.BackgroundTransparency = 1
+				nameLabel.Text = playerData.name
+				nameLabel.TextColor3 = isLocalPlayer and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1)
+				nameLabel.Font = Enum.Font.GothamBold
+				nameLabel.TextSize = 14
+				nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+				nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+				nameLabel.Parent = row
+
+				-- Kills
+				local killsLabel = Instance.new("TextLabel")
+				killsLabel.Size = UDim2.new(0.15, 0, 1, 0)
+				killsLabel.Position = UDim2.new(0.4, 0, 0, 0)
+				killsLabel.BackgroundTransparency = 1
+				killsLabel.Text = tostring(stats.kodoKills or 0)
+				killsLabel.TextColor3 = Color3.new(1, 1, 0.4)
+				killsLabel.Font = Enum.Font.GothamBold
+				killsLabel.TextSize = 14
+				killsLabel.Parent = row
+
+				-- Deaths
+				local deathsLabel = Instance.new("TextLabel")
+				deathsLabel.Size = UDim2.new(0.15, 0, 1, 0)
+				deathsLabel.Position = UDim2.new(0.55, 0, 0, 0)
+				deathsLabel.BackgroundTransparency = 1
+				deathsLabel.Text = tostring(stats.deaths or 0)
+				deathsLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
+				deathsLabel.Font = Enum.Font.GothamBold
+				deathsLabel.TextSize = 14
+				deathsLabel.Parent = row
+
+				-- Saves
+				local savesLabel = Instance.new("TextLabel")
+				savesLabel.Size = UDim2.new(0.15, 0, 1, 0)
+				savesLabel.Position = UDim2.new(0.7, 0, 0, 0)
+				savesLabel.BackgroundTransparency = 1
+				savesLabel.Text = tostring(stats.saves or 0)
+				savesLabel.TextColor3 = Color3.new(0.4, 1, 0.8)
+				savesLabel.Font = Enum.Font.GothamBold
+				savesLabel.TextSize = 14
+				savesLabel.Parent = row
+
+				-- Gold earned
+				local goldLabel = Instance.new("TextLabel")
+				goldLabel.Size = UDim2.new(0.15, 0, 1, 0)
+				goldLabel.Position = UDim2.new(0.85, 0, 0, 0)
+				goldLabel.BackgroundTransparency = 1
+				goldLabel.Text = tostring(stats.goldEarned or 0)
+				goldLabel.TextColor3 = Color3.new(1, 0.85, 0)
+				goldLabel.Font = Enum.Font.GothamBold
+				goldLabel.TextSize = 14
+				goldLabel.Parent = row
+			end
+
+			-- Update canvas size
+			playerList.CanvasSize = UDim2.new(0, 0, 0, #sortedPlayers * 36)
 
 			-- Return countdown
 			local countdownLabel = Instance.new("TextLabel")
 			countdownLabel.Name = "CountdownLabel"
-			countdownLabel.Size = UDim2.new(1, 0, 0.1, 0)
-			countdownLabel.Position = UDim2.new(0, 0, 0.85, 0)
+			countdownLabel.Size = UDim2.new(1, 0, 0, 30)
+			countdownLabel.Position = UDim2.new(0, 0, 1, -35)
 			countdownLabel.BackgroundTransparency = 1
 			countdownLabel.Text = "Returning to lobby in " .. (data.returnDelay or 10) .. "..."
 			countdownLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
