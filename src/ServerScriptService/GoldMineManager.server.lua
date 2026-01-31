@@ -2,13 +2,15 @@
 -- Fixed gold mines at strategic map locations
 -- Higher risk/reward than passive farm income
 
+print("GoldMineManager: Script loaded")
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
--- Only run on game servers (reserved servers)
-local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
-if not isReservedServer then
+-- Check if game server (wait for GameInitializer to set this)
+local isGameServerValue = ReplicatedStorage:WaitForChild("IsGameServer", 10)
+if not isGameServerValue or not isGameServerValue.Value then
 	print("GoldMineManager: Lobby server - disabled")
 	return
 end
