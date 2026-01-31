@@ -164,11 +164,15 @@ local function hideLoading()
 	stopSpinner()
 end
 
--- Check if this is a game server - if so, show loading until round starts
+-- Show loading screen IMMEDIATELY on any server (hide later if lobby)
+-- This prevents the frozen screen gap during teleport
+showLoading("Loading...")
+
+-- Check if this is a game server
 local isGameServerValue = ReplicatedStorage:WaitForChild("IsGameServer", 5)
 if isGameServerValue and isGameServerValue.Value then
-	-- We're on a game server, show loading
-	showLoading("Preparing game...")
+	-- We're on a game server, keep loading visible
+	loadingLabel.Text = "Preparing game..."
 
 	-- Wait for round to start
 	local roundStarted = ReplicatedStorage:WaitForChild("RoundStarted", 30)
@@ -194,6 +198,11 @@ if isGameServerValue and isGameServerValue.Value then
 		if loadingFrame.Visible then
 			hideLoading()
 		end
+	end)
+else
+	-- We're on lobby server, hide loading screen quickly
+	task.delay(0.5, function()
+		hideLoading()
 	end)
 end
 
