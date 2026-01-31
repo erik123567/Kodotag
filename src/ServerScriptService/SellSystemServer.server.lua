@@ -26,7 +26,8 @@ local ITEM_COSTS = {
 	PoisonTurret = 90,
 	MultiShotTurret = 120,
 	CannonTurret = 150,
-	Wall = 25,
+	Barricade = 15,
+	Wall = 60,
 	Farm = 75,
 	Workshop = 150
 }

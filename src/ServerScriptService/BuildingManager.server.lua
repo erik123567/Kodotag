@@ -24,7 +24,8 @@ local BUILD_TIMES = {
 	PoisonTurret = 5,
 	MultiShotTurret = 6,
 	CannonTurret = 8,
-	Wall = 2,
+	Barricade = 1,  -- Fast maze building
+	Wall = 4,       -- Heavy defensive wall
 	Farm = 5,
 	Workshop = 10
 }
@@ -180,8 +181,23 @@ function getItemTemplateEvent.OnServerInvoke(player, itemName)
 end
 
 -- Function: Get base health for structure type
-local function getBaseHealth(categoryName)
-	if categoryName == "Walls" then
+local function getBaseHealth(categoryName, itemName)
+	-- Item-specific health overrides
+	local itemHealth = {
+		Barricade = 75,   -- Cheap maze obstacle
+		Wall = 500,       -- Heavy defensive wall
+	}
+
+	if itemHealth[itemName] then
+		return itemHealth[itemName]
+	end
+
+	-- Category defaults
+	if categoryName == "Maze" then
+		return 75
+	elseif categoryName == "Defense" then
+		return 500
+	elseif categoryName == "Walls" then  -- Legacy
 		return 200
 	elseif categoryName == "Turrets" then
 		return 100
@@ -198,7 +214,7 @@ local function addHealthToStructure(structure, itemName, categoryName, playerNam
 	local health = Instance.new("IntValue")
 	health.Name = "Health"
 
-	local baseHealth = getBaseHealth(categoryName)
+	local baseHealth = getBaseHealth(categoryName, itemName)
 
 	-- Apply Reinforced Structures upgrade bonus
 	local healthBonus = 1.0
@@ -334,7 +350,7 @@ local function createConstructionSite(itemName, position, rotation, categoryName
 	rotationValue.Parent = buildInfo
 
 	-- Add health (construction sites have 50% health)
-	local baseHealth = getBaseHealth(categoryName)
+	local baseHealth = getBaseHealth(categoryName, itemName)
 	local healthBonus = 1.0
 	if _G.UpgradeManager and playerName then
 		local bonusPercent = _G.UpgradeManager.getUpgradeEffect(playerName, "ReinforcedStructures")
@@ -444,9 +460,44 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 		end
 	end
 
+	-- Create dynamic templates for items that don't have pre-made templates
 	if not template then
-		warn("BuildingManager: Template not found for", itemName)
-		return
+		if itemName == "Barricade" then
+			-- Create Barricade template dynamically
+			template = Instance.new("Part")
+			template.Name = "Barricade"
+			template.Size = Vector3.new(4, 5, 4)
+			template.Material = Enum.Material.Wood
+			template.BrickColor = BrickColor.new("Brown")
+			template.Anchored = true
+
+			local cost = Instance.new("IntValue")
+			cost.Name = "Cost"
+			cost.Value = 15
+			cost.Parent = template
+
+			categoryName = "Maze"
+			print("BuildingManager: Created dynamic Barricade template")
+		elseif itemName == "Wall" then
+			-- Create Wall template dynamically (reinforced wall)
+			template = Instance.new("Part")
+			template.Name = "Wall"
+			template.Size = Vector3.new(12, 8, 2)
+			template.Material = Enum.Material.Concrete
+			template.BrickColor = BrickColor.new("Medium stone grey")
+			template.Anchored = true
+
+			local cost = Instance.new("IntValue")
+			cost.Name = "Cost"
+			cost.Value = 60
+			cost.Parent = template
+
+			categoryName = "Defense"
+			print("BuildingManager: Created dynamic Wall template")
+		else
+			warn("BuildingManager: Template not found for", itemName)
+			return
+		end
 	end
 
 	-- Check if this item requires a workshop

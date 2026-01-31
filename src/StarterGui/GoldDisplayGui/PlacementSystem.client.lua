@@ -21,6 +21,10 @@ print("PlacementSystem: Starting...")
 local GRID_SIZE = 5
 local PLACEMENT_RANGE = 50
 
+-- Maze building settings
+-- Walls can be placed with gaps: 3-6 studs = player only, 7+ = both pass
+local MIN_WALL_GAP = 2  -- Minimum studs between wall edges (allows player-only gaps)
+
 -- Turrets that require a workshop to build
 local REQUIRES_WORKSHOP = {
 	SlowTurret = true,
@@ -137,15 +141,27 @@ local BUILDABLE_ITEMS = {
 		}
 	},
 	{
-		name = "Wall",
-		displayName = "Wall",
-		cost = 25,
-		buildTime = 2,
-		size = Vector3.new(10, 6, 1),
-		category = "Walls",
+		name = "Barricade",
+		displayName = "Barricade",
+		cost = 15,
+		buildTime = 1,
+		size = Vector3.new(4, 5, 4),
+		category = "Maze",
 		stats = {
-			health = 200,
-			description = "Blocks Kodo movement"
+			health = 75,
+			description = "Cheap maze obstacle. Small gaps let players through but block Kodos. Quick to place, easy to destroy."
+		}
+	},
+	{
+		name = "Wall",
+		displayName = "Reinforced Wall",
+		cost = 60,
+		buildTime = 4,
+		size = Vector3.new(12, 8, 2),
+		category = "Defense",
+		stats = {
+			health = 500,
+			description = "Heavy defensive wall for protecting your base. Place behind turrets to create strongholds."
 		}
 	},
 	{
@@ -432,6 +448,7 @@ local function checkPlacementValid(position, size)
 				or obj.Name == "FrostTurret" or obj.Name == "PoisonTurret"
 				or obj.Name == "MultiShotTurret" or obj.Name == "CannonTurret")
 			local isWall = (obj.Name == "Wall")
+			local isBarricade = (obj.Name == "Barricade")
 			local isFarm = (obj.Name == "Farm")
 			local isWorkshop = (obj.Name == "Workshop")
 
@@ -445,17 +462,40 @@ local function checkPlacementValid(position, size)
 				if isFarm and dist < 5 then
 					return false
 				end
-				-- Walls never block turrets
+				-- Walls/Barricades don't block turrets (can place turrets behind walls)
 
-			-- If placing a WALL
-			elseif selectedItem and selectedItem.category == "Walls" then
-				-- Block if turret center is within 4 studs of wall center
-				if isTurret and dist < 4 then
+			-- If placing a BARRICADE (maze building)
+			elseif selectedItem and selectedItem.category == "Maze" then
+				-- Barricades can be placed close together for maze building
+				-- Only block if directly overlapping (within 3 studs)
+				if isBarricade and dist < 3 then
 					return false
 				end
-				-- Block if wall center is within 3 studs of another wall center
-				-- This allows corners (walls 5 studs apart on grid) but prevents stacking
-				if isWall and dist < 3 then
+				-- Block if wall is within 4 studs
+				if isWall and dist < 4 then
+					return false
+				end
+				-- Block if turret is within 3 studs
+				if isTurret and dist < 3 then
+					return false
+				end
+				-- Block if farm is within 4 studs
+				if isFarm and dist < 4 then
+					return false
+				end
+
+			-- If placing a WALL (defensive)
+			elseif selectedItem and selectedItem.category == "Defense" then
+				-- Block if another wall is within 5 studs
+				if isWall and dist < 5 then
+					return false
+				end
+				-- Block if barricade is within 4 studs
+				if isBarricade and dist < 4 then
+					return false
+				end
+				-- Block if turret is within 5 studs
+				if isTurret and dist < 5 then
 					return false
 				end
 				-- Block if farm is within 5 studs
@@ -477,6 +517,10 @@ local function checkPlacementValid(position, size)
 				if isWall and dist < 4 then
 					return false
 				end
+				-- Block if barricade is within 4 studs
+				if isBarricade and dist < 4 then
+					return false
+				end
 				-- Block if workshop is within 6 studs
 				if isWorkshop and dist < 6 then
 					return false
@@ -494,6 +538,10 @@ local function checkPlacementValid(position, size)
 				end
 				-- Block if wall is within 5 studs
 				if isWall and dist < 5 then
+					return false
+				end
+				-- Block if barricade is within 4 studs
+				if isBarricade and dist < 4 then
 					return false
 				end
 				-- Block if farm is within 6 studs
@@ -543,7 +591,22 @@ local function createPreview(itemData)
 			rangeCircle.Parent = preview
 		end
 
-	elseif itemData.category == "Walls" then
+	elseif itemData.category == "Maze" then
+		-- Barricade - square maze obstacle
+		local barricade = Instance.new("Part")
+		barricade.Name = "Barricade"
+		barricade.Size = itemData.size
+		barricade.Anchored = true
+		barricade.CanCollide = false
+		barricade.Material = Enum.Material.Wood
+		barricade.Transparency = 0.5
+		barricade.Color = Color3.new(0, 1, 0)
+		barricade.Parent = preview
+
+		preview.PrimaryPart = barricade
+
+	elseif itemData.category == "Defense" then
+		-- Reinforced Wall - heavy defensive structure
 		local wall = Instance.new("Part")
 		wall.Name = "Wall"
 		wall.Size = itemData.size
@@ -600,12 +663,12 @@ local function updatePreview()
 	-- Filter out character, preview, AND all buildings
 	local filterList = {player.Character, previewModel}
 
-	-- Add all turrets, walls, farms, and workshops to filter list
+	-- Add all turrets, walls, barricades, farms, and workshops to filter list
 	for _, obj in ipairs(workspace:GetChildren()) do
 		if obj.Name == "Turret" or obj.Name == "FastTurret" or obj.Name == "SlowTurret"
 			or obj.Name == "FrostTurret" or obj.Name == "PoisonTurret"
 			or obj.Name == "MultiShotTurret" or obj.Name == "CannonTurret"
-			or obj.Name == "Wall" or obj.Name == "Farm" or obj.Name == "Workshop" then
+			or obj.Name == "Wall" or obj.Name == "Barricade" or obj.Name == "Farm" or obj.Name == "Workshop" then
 			table.insert(filterList, obj)
 		end
 	end
@@ -708,7 +771,9 @@ local function formatStats(itemData)
 		text = text .. "Fire Rate: " .. stats.fireRate .. "\n"
 		text = text .. "Range: " .. stats.range .. " studs\n"
 		text = text .. "Health: " .. stats.health .. "\n\n"
-	elseif itemData.category == "Walls" then
+	elseif itemData.category == "Maze" then
+		text = text .. "Health: " .. stats.health .. "\n\n"
+	elseif itemData.category == "Defense" then
 		text = text .. "Health: " .. stats.health .. "\n\n"
 	elseif itemData.category == "Farms" then
 		text = text .. "Income: " .. stats.income .. "\n"
@@ -719,7 +784,7 @@ local function formatStats(itemData)
 
 	text = text .. stats.description
 
-	if itemData.category == "Walls" then
+	if itemData.category == "Defense" then
 		text = text .. "\n\nPress R to rotate"
 	end
 

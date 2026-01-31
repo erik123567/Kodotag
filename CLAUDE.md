@@ -126,6 +126,32 @@ local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerI
 | MultiShotTurret | 120g | Multishot | 3 projectiles | Horde |
 | CannonTurret | 150g | AOE | 15 radius | Armored, Horde |
 
+### Maze Building Mechanics
+The core mechanic from original WC3 Kodo Tag - players build mazes to slow Kodos while turrets deal damage.
+
+**Two Structure Types**:
+| Structure | Cost | Health | Size | Purpose |
+|-----------|------|--------|------|---------|
+| **Barricade** | 15g | 75 HP | 4x5x4 | Cheap maze building, quick 1s construction |
+| **Reinforced Wall** | 60g | 500 HP | 12x8x2 | Heavy defense, protects turrets |
+
+**Gap Mechanics**:
+- **Kodo Agent Size**: `AgentRadius = 3.5`, `AgentHeight = 8` - Kodos need 7+ stud gaps to pass
+- **Player Size**: Players can fit through 3+ stud gaps
+- **Tactical Gaps**: 3-6 studs = player-only passage, 7+ studs = both can pass
+
+**Kodo Pathfinding Behavior**:
+- Kodos use PathfindingService with large agent size
+- They try to find paths around walls before attacking
+- **Frustration System**: Kodos must fail pathfinding 3+ times AND reach frustration level 5+ before attacking
+- This gives players time to escape through small gaps while Kodos take the long way
+
+**Building Strategy**:
+- Use **Barricades** to build long mazes - cheap, fast, disposable
+- Use **Reinforced Walls** around your base/turrets for protection
+- Place turrets behind walls so Kodos must navigate the maze
+- Grid size is 5 studs for precise placement
+
 ### Next Steps (Suggested)
 1. **All-Players Leaderboard** - Show everyone's stats on game over screen
 2. **High Score Tracking** - Save best wave reached (DataStore)

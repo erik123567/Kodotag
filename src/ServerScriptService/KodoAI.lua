@@ -80,6 +80,13 @@ local PLAYER_KILL_RANGE = 5
 local RAYCAST_DISTANCE = 15
 local PATH_CACHE_TIME = 3
 
+-- Maze mechanics settings
+-- Kodos are larger than players - they can't fit through small gaps
+local KODO_AGENT_RADIUS = 3.5    -- Kodos need 7+ stud gaps to pass
+local KODO_AGENT_HEIGHT = 8      -- Taller to prevent jumping over walls
+local PLAYER_FIT_GAP = 3         -- Players can fit through 3 stud gaps
+-- This creates tactical gap sizes: 3-6 studs = player only, 7+ = both can pass
+
 -- Setup collision groups
 local collisionGroupsSetup = false
 local function setupCollisionGroups()
@@ -355,7 +362,8 @@ local function isPathClear(startPos, targetPos, ignoreList)
 	if result then
 		local hit = result.Instance
 		local structureNames = {
-			Wall = true, Turret = true, FastTurret = true, SlowTurret = true,
+			Barricade = true, Wall = true,
+			Turret = true, FastTurret = true, SlowTurret = true,
 			FrostTurret = true, PoisonTurret = true, MultiShotTurret = true, CannonTurret = true,
 			Farm = true, Workshop = true
 		}
@@ -373,7 +381,8 @@ local function findBlockingStructure(position)
 	local nearestDistance = 10
 
 	local structureNames = {
-		Wall = true, Turret = true, FastTurret = true, SlowTurret = true,
+		Barricade = true, Wall = true,
+		Turret = true, FastTurret = true, SlowTurret = true,
 		FrostTurret = true, PoisonTurret = true, MultiShotTurret = true, CannonTurret = true,
 		Farm = true, Workshop = true
 	}
@@ -406,7 +415,14 @@ local function attackStructure(kodo, structure)
 	if not structureHealth then
 		structureHealth = Instance.new("IntValue")
 		structureHealth.Name = "Health"
-		structureHealth.Value = structure.Name == "Wall" and 200 or 100
+		-- Structure health values
+		local healthValues = {
+			Wall = 500,        -- Heavy defensive wall
+			Barricade = 75,    -- Cheap maze obstacle
+			Workshop = 250,
+			Farm = 150
+		}
+		structureHealth.Value = healthValues[structure.Name] or 100
 		structureHealth.Parent = structure
 	end
 
@@ -437,6 +453,12 @@ function KodoAI.runAI(kodo)
 	local lastPosition = rootPart.Position
 	local lastMoveTime = tick()
 	local lastAttackTime = 0
+
+	-- Maze navigation: Kodos try to find paths before attacking walls
+	local pathfindAttempts = 0       -- How many times pathfinding failed
+	local MAX_PATH_ATTEMPTS = 3      -- Try this many times before attacking
+	local frustrationLevel = 0       -- Increases when stuck, decreases when moving
+	local FRUSTRATION_THRESHOLD = 5  -- Attack walls after this much frustration
 
 	-- Movement reached connection
 	local moveConnection = humanoid.MoveToFinished:Connect(function(reached)
@@ -477,12 +499,20 @@ function KodoAI.runAI(kodo)
 				end
 			end
 
-			-- Check if stuck
+			-- Check if stuck (for maze navigation)
 			local distanceMoved = (rootPart.Position - lastPosition).Magnitude
 			local isStuck = distanceMoved < 1 and tick() - lastMoveTime > 1.5
 
 			if distanceMoved > 1 then
 				lastMoveTime = tick()
+				-- Moving well - reduce frustration
+				frustrationLevel = math.max(0, frustrationLevel - 1)
+				pathfindAttempts = 0
+			else
+				-- Not moving - increase frustration
+				if tick() - lastMoveTime > 1 then
+					frustrationLevel = frustrationLevel + 1
+				end
 			end
 			lastPosition = rootPart.Position
 
@@ -492,8 +522,9 @@ function KodoAI.runAI(kodo)
 				if targetRoot then
 					local targetPos = targetRoot.Position
 
-					-- If stuck, attack nearest structure
-					if isStuck then
+					-- Maze behavior: Only attack walls when truly frustrated
+					-- This gives Kodos time to find alternate paths
+					if isStuck and frustrationLevel >= FRUSTRATION_THRESHOLD then
 						local nearestStructure = findBlockingStructure(rootPart.Position)
 						if nearestStructure then
 							if tick() - lastAttackTime >= STRUCTURE_ATTACK_COOLDOWN then
@@ -502,12 +533,19 @@ function KodoAI.runAI(kodo)
 								if destroyed then
 									lastMoveTime = tick()
 									usingPathfinding = false
+									frustrationLevel = 0
+									pathfindAttempts = 0
 								end
 							end
 						else
 							lastMoveTime = tick()
 							usingPathfinding = false
+							frustrationLevel = 0
 						end
+					elseif isStuck then
+						-- Stuck but not frustrated enough - try to find new path
+						usingPathfinding = false
+						pathfindAttempts = pathfindAttempts + 1
 					else
 						-- Not stuck - try movement
 						if not usingPathfinding or tick() - pathCreatedTime > PATH_CACHE_TIME then
@@ -517,13 +555,18 @@ function KodoAI.runAI(kodo)
 								usingPathfinding = false
 								humanoid:MoveTo(targetPos)
 							else
-								-- Try pathfinding
-								local path = PathfindingService:CreatePath({
-									AgentRadius = 2,
-									AgentHeight = 6,
-									AgentCanJump = false,
-									WaypointSpacing = 5
-								})
+								-- Try pathfinding with Kodo-sized agent
+							-- Kodos are larger than players, so they can't fit through small gaps
+							local path = PathfindingService:CreatePath({
+								AgentRadius = KODO_AGENT_RADIUS,
+								AgentHeight = KODO_AGENT_HEIGHT,
+								AgentCanJump = false,
+								WaypointSpacing = 4,
+								Costs = {
+									-- Prefer open paths, avoid tight spaces
+									Wall = math.huge  -- Cannot path through walls
+								}
+							})
 
 								local success = pcall(function()
 									path:ComputeAsync(rootPart.Position, targetPos)
@@ -534,20 +577,31 @@ function KodoAI.runAI(kodo)
 									currentWaypointIndex = 1
 									usingPathfinding = true
 									pathCreatedTime = tick()
+									pathfindAttempts = 0  -- Reset on success
 
 									local waypoints = path:GetWaypoints()
 									if waypoints[1] then
 										humanoid:MoveTo(waypoints[1].Position)
 									end
 								else
-									-- No path - attack structures
-									local nearestStructure = findBlockingStructure(rootPart.Position)
-									if nearestStructure then
-										if tick() - lastAttackTime >= STRUCTURE_ATTACK_COOLDOWN then
-											attackStructure(kodo, nearestStructure)
-											lastAttackTime = tick()
+									-- No path found - increase frustration
+									pathfindAttempts = pathfindAttempts + 1
+									frustrationLevel = frustrationLevel + 1
+
+									-- Only attack if we've tried enough times
+									if pathfindAttempts >= MAX_PATH_ATTEMPTS then
+										local nearestStructure = findBlockingStructure(rootPart.Position)
+										if nearestStructure then
+											if tick() - lastAttackTime >= STRUCTURE_ATTACK_COOLDOWN then
+												attackStructure(kodo, nearestStructure)
+												lastAttackTime = tick()
+											end
+										else
+											-- No structure blocking - just move toward target
+											humanoid:MoveTo(targetPos)
 										end
 									else
+										-- Try moving toward target anyway (might find a gap)
 										humanoid:MoveTo(targetPos)
 									end
 								end

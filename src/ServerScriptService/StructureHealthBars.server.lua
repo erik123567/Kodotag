@@ -93,7 +93,8 @@ end
 
 -- Valid structure names
 local VALID_STRUCTURES = {
-	Wall = true, Turret = true, FastTurret = true, SlowTurret = true,
+	Barricade = true, Wall = true,
+	Turret = true, FastTurret = true, SlowTurret = true,
 	FrostTurret = true, PoisonTurret = true, MultiShotTurret = true, CannonTurret = true,
 	Farm = true, Workshop = true
 }
