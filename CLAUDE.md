@@ -86,24 +86,29 @@ local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerI
 ### Recently Implemented
 - Lobby pad system with SOLO/SMALL/MEDIUM/LARGE modes
 - Reserved server teleportation with game config passing
-- Game over screen with player stats (kills, deaths, gold earned)
+- Game over screen with player stats (kills, deaths, saves, gold earned)
 - Auto-return to lobby after game over
 - Game info panel UI (top-right, shows wave/gold/lives)
 - Player stats panel (deaths, saves, kills)
+- Lobby Pad UI - Shows game mode info when standing on pads
+- Sell Mode UI - Press X or click button, then click buildings to sell
+- Difficulty Scaling - Exponential scaling with special wave types
 
-### Uncommitted Changes
-- `PadManager.server.lua` (new file) - Full lobby pad implementation
-- Server scripts have reserved server checks added
-- `RoundManager` - Game over → return to lobby flow
-- `NotificationHandler` - Game over UI screen
-- `GameInitializer` - Teleport data handling, player ready signaling
+### Difficulty Scaling System
+- **Exponential growth**: Stats scale by multipliers each wave (not linear)
+- **Player count scaling**: More players = more Kodos + higher health
+- **Pad type difficulty**: SOLO is easier, LARGE is harder
+- **Special waves**:
+  - Boss waves (every 5): One powerful boss Kodo
+  - Swarm waves (every 7): Triple kodos, but weaker and faster
+  - Elite waves (every 10): Half kodos, but much stronger, 2x gold
 
 ### Next Steps (Suggested)
-1. **Lobby Pad UI** - Client-side display showing pad status (X/Y players, countdown)
-2. **Victory Condition** - Survive 30 minutes (like original) or survive X waves
-3. **Difficulty Scaling** - Use `gameConfig.difficulty` to affect enemy count/health
-4. **Map Variations** - Different maps or spawn configs for SOLO vs LARGE games
-5. **Commit current changes** - 387 lines changed across 16 files
+1. **All-Players Leaderboard** - Show everyone's stats on game over screen
+2. **High Score Tracking** - Save best wave reached (DataStore)
+3. **Kodo Variety** - Different Kodo types with unique abilities
+4. **Death Abilities** - Dead players can help survivors (from original WC3)
+5. **Map Variations** - Different maps for SOLO vs LARGE games
 
 ### Features to Consider (from Original)
 - **Maze Mode vs Bunker Mode** - Toggle whether Kodos only attack buildings when blocked

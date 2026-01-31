@@ -27,25 +27,55 @@ local KodoAI = require(script.Parent.KodoAI)
 
 -- Settings
 local INTERMISSION_TIME = 10
-local INITIAL_KODOS = 2
-local KODOS_PER_WAVE = 1
 local WAVE_INTERVAL = 30
-local KODO_SPEED_INCREASE = 2
-local INITIAL_KODO_SPEED = 16
 local GOLD_PER_KODO_KILL = 10  -- Gold reward for killing Kodos
 
--- Difficulty Scaling
-local KODO_HEALTH_BASE = 100
-local KODO_HEALTH_PER_WAVE = 15
-local KODO_DAMAGE_BASE = 25
-local KODO_DAMAGE_PER_WAVE = 5
+-- Base Difficulty (scales with wave and player count)
+local BASE_KODOS = 2
+local BASE_KODO_SPEED = 14
+local BASE_KODO_HEALTH = 80
+local BASE_KODO_DAMAGE = 20
+
+-- Scaling multipliers (exponential growth)
+local KODO_COUNT_GROWTH = 1.15      -- 15% more kodos per wave
+local KODO_HEALTH_GROWTH = 1.12     -- 12% more health per wave
+local KODO_DAMAGE_GROWTH = 1.08     -- 8% more damage per wave
+local KODO_SPEED_GROWTH = 1.02      -- 2% faster per wave (capped)
+local MAX_KODO_SPEED = 28           -- Speed cap
+
+-- Player count scaling
+local KODOS_PER_PLAYER = 1          -- Extra kodos per player beyond first
+local HEALTH_PER_PLAYER = 0.1       -- 10% more health per extra player
+
+-- Pad type difficulty multipliers
+local DIFFICULTY_MULTIPLIERS = {
+	SOLO = { kodos = 0.7, health = 0.8, damage = 0.8, speed = 0.9 },
+	SMALL = { kodos = 1.0, health = 1.0, damage = 1.0, speed = 1.0 },
+	MEDIUM = { kodos = 1.2, health = 1.1, damage = 1.1, speed = 1.0 },
+	LARGE = { kodos = 1.4, health = 1.2, damage = 1.2, speed = 1.05 }
+}
+
+-- Special wave types
+local BOSS_WAVE_INTERVAL = 5
+local SWARM_WAVE_INTERVAL = 7       -- Lots of weak kodos
+local ELITE_WAVE_INTERVAL = 10      -- Few but very strong kodos
 
 -- Boss Settings
-local BOSS_WAVE_INTERVAL = 5
 local BOSS_HEALTH_MULTIPLIER = 5
 local BOSS_SIZE_MULTIPLIER = 1.5
 local BOSS_GOLD_REWARD = 100
 local BOSS_COLOR = Color3.fromRGB(139, 0, 0)
+
+-- Swarm Settings
+local SWARM_COUNT_MULTIPLIER = 3    -- Triple the kodos
+local SWARM_HEALTH_MULTIPLIER = 0.4 -- But much weaker
+local SWARM_SPEED_MULTIPLIER = 1.2  -- And faster
+
+-- Elite Settings
+local ELITE_COUNT_MULTIPLIER = 0.5  -- Half the kodos
+local ELITE_HEALTH_MULTIPLIER = 2.5 -- But much stronger
+local ELITE_DAMAGE_MULTIPLIER = 1.5
+local ELITE_GOLD_MULTIPLIER = 2     -- More gold reward
 
 -- References
 local gameArea = workspace:FindFirstChild("GameArea")
@@ -340,18 +370,70 @@ local function spawnKodoWave()
 	local shrine = (gameArea and gameArea:FindFirstChild("ResurrectionShrine")) or (gameArea and gameArea:FindFirstChild("RessurectionShrine")) or workspace:FindFirstChild("ResurrectionShrine")
 	local shrinePos = shrine and shrine.Position or Vector3.new(0, 0, 0)
 
-	-- Difficulty scaling
-	local kodoCount = math.floor(INITIAL_KODOS + (currentWave - 1) * KODOS_PER_WAVE + currentWave * 0.3)
-	local kodoSpeed = INITIAL_KODO_SPEED + (currentWave - 1) * KODO_SPEED_INCREASE
-	local kodoHealth = KODO_HEALTH_BASE + (currentWave - 1) * KODO_HEALTH_PER_WAVE
-	local kodoDamage = KODO_DAMAGE_BASE + (currentWave - 1) * KODO_DAMAGE_PER_WAVE
-	local isBossWave = (currentWave % BOSS_WAVE_INTERVAL == 0)
+	-- Get game config for difficulty
+	local gameConfig = _G.GameConfig or {}
+	local padType = gameConfig.padType or "SOLO"
+	local diffMult = DIFFICULTY_MULTIPLIERS[padType] or DIFFICULTY_MULTIPLIERS.SOLO
+	local playerCount = #Players:GetPlayers()
 
-	print("Spawning wave " .. currentWave .. " with " .. kodoCount .. " Kodos (HP:" .. kodoHealth .. " DMG:" .. kodoDamage .. " Speed:" .. kodoSpeed .. ")")
-	showNotification:FireAllClients("Wave " .. currentWave .. " incoming!", Color3.new(1, 0.5, 0))
+	-- Determine wave type
+	local isBossWave = (currentWave % BOSS_WAVE_INTERVAL == 0)
+	local isSwarmWave = (currentWave % SWARM_WAVE_INTERVAL == 0) and not isBossWave
+	local isEliteWave = (currentWave % ELITE_WAVE_INTERVAL == 0) and not isBossWave
+
+	-- Calculate base stats with exponential scaling
+	local waveMultiplier = currentWave - 1
+	local baseKodoCount = BASE_KODOS * math.pow(KODO_COUNT_GROWTH, waveMultiplier)
+	local baseHealth = BASE_KODO_HEALTH * math.pow(KODO_HEALTH_GROWTH, waveMultiplier)
+	local baseDamage = BASE_KODO_DAMAGE * math.pow(KODO_DAMAGE_GROWTH, waveMultiplier)
+	local baseSpeed = math.min(BASE_KODO_SPEED * math.pow(KODO_SPEED_GROWTH, waveMultiplier), MAX_KODO_SPEED)
+
+	-- Apply player count scaling
+	local playerMultiplier = 1 + (playerCount - 1) * KODOS_PER_PLAYER * 0.5
+	local playerHealthMult = 1 + (playerCount - 1) * HEALTH_PER_PLAYER
+	baseKodoCount = baseKodoCount * playerMultiplier
+	baseHealth = baseHealth * playerHealthMult
+
+	-- Apply pad type difficulty
+	local kodoCount = math.floor(baseKodoCount * diffMult.kodos)
+	local kodoHealth = math.floor(baseHealth * diffMult.health)
+	local kodoDamage = math.floor(baseDamage * diffMult.damage)
+	local kodoSpeed = baseSpeed * diffMult.speed
+
+	-- Apply wave type modifiers
+	local waveTypeText = ""
+	local waveColor = Color3.new(1, 0.5, 0)
+	local goldMultiplier = 1
+
+	if isSwarmWave then
+		kodoCount = math.floor(kodoCount * SWARM_COUNT_MULTIPLIER)
+		kodoHealth = math.floor(kodoHealth * SWARM_HEALTH_MULTIPLIER)
+		kodoSpeed = kodoSpeed * SWARM_SPEED_MULTIPLIER
+		waveTypeText = "SWARM "
+		waveColor = Color3.new(1, 1, 0)
+	elseif isEliteWave then
+		kodoCount = math.max(2, math.floor(kodoCount * ELITE_COUNT_MULTIPLIER))
+		kodoHealth = math.floor(kodoHealth * ELITE_HEALTH_MULTIPLIER)
+		kodoDamage = math.floor(kodoDamage * ELITE_DAMAGE_MULTIPLIER)
+		goldMultiplier = ELITE_GOLD_MULTIPLIER
+		waveTypeText = "ELITE "
+		waveColor = Color3.new(0.8, 0.2, 1)
+	elseif isBossWave then
+		waveTypeText = "BOSS "
+		waveColor = Color3.new(1, 0, 0)
+	end
+
+	-- Ensure minimums
+	kodoCount = math.max(2, kodoCount)
+	kodoHealth = math.max(50, kodoHealth)
+	kodoDamage = math.max(10, kodoDamage)
+	kodoSpeed = math.max(10, kodoSpeed)
+
+	print("Spawning " .. waveTypeText .. "wave " .. currentWave .. " with " .. kodoCount .. " Kodos (HP:" .. kodoHealth .. " DMG:" .. kodoDamage .. " Speed:" .. string.format("%.1f", kodoSpeed) .. ")")
+	showNotification:FireAllClients(waveTypeText .. "Wave " .. currentWave .. " - " .. kodoCount .. " Kodos!", waveColor)
 
 	-- Helper function to connect kodo death event
-	local function connectKodoDeath(kodo, isBoss)
+	local function connectKodoDeath(kodo, isBoss, kodoGoldMult)
 		local humanoid = kodo:FindFirstChild("Humanoid")
 		if humanoid then
 			humanoid.Died:Connect(function()
@@ -370,8 +452,8 @@ local function spawnKodoWave()
 				for _, player in ipairs(Players:GetPlayers()) do
 					RoundManager.initPlayerStats(player)
 
-					-- Base gold + Bounty Hunter bonus + Boss bonus
-					local goldReward = GOLD_PER_KODO_KILL
+					-- Base gold * wave multiplier + Bounty Hunter bonus + Boss bonus
+					local goldReward = math.floor(GOLD_PER_KODO_KILL * (kodoGoldMult or 1))
 					if isBoss then
 						goldReward = goldReward + BOSS_GOLD_REWARD
 					end
@@ -419,7 +501,7 @@ local function spawnKodoWave()
 
 			if kodo then
 				table.insert(activeKodos, kodo)
-				connectKodoDeath(kodo, false)
+				connectKodoDeath(kodo, false, goldMultiplier)
 				print("RoundManager: Spawned Kodo #" .. i)
 			end
 		end
@@ -448,7 +530,7 @@ local function spawnKodoWave()
 
 				if boss then
 					table.insert(activeKodos, boss)
-					connectKodoDeath(boss, true)
+					connectKodoDeath(boss, true, goldMultiplier)
 					print("RoundManager: Spawned BOSS KODO with", bossHealth, "HP")
 				end
 			end
