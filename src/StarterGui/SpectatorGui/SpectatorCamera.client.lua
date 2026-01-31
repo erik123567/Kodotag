@@ -311,12 +311,18 @@ if player.Character then
 	onCharacterAdded(player.Character)
 end
 
--- Lock mouse when spectating in free mode
+-- Only lock mouse when actively spectating in free mode
+-- Don't touch MouseBehavior when not spectating (let Roblox handle it)
+local wasLocked = false
 RunService.RenderStepped:Connect(function()
 	if isSpectating and spectateMode == "free" then
-		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-	else
+		if not wasLocked then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+			wasLocked = true
+		end
+	elseif wasLocked then
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		wasLocked = false
 	end
 end)
 
