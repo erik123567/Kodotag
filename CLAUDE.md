@@ -128,6 +128,20 @@ Dead players can spend gold to help surviving teammates:
 
 Death abilities panel appears on the left side of screen when player dies.
 
+### Power-Ups
+Random power-ups spawn around the map every 25 seconds (max 5 at once). They despawn after 30 seconds if not collected. Shown as pulsing white dots on minimap.
+
+| Power-Up | Effect | Weight |
+|----------|--------|--------|
+| **Gold Rush** | +50 gold instantly | 30% |
+| **Speed Surge** | 50% movement speed for 10s | 20% |
+| **Shield** | Invincibility for 5s | 10% |
+| **Turret Boost** | Your turrets deal 2x damage for 15s | 15% |
+| **Repair Kit** | Heal all your structures 50% | 15% |
+| **Freeze Bomb** | Freeze all Kodos for 4s | 10% |
+
+Power-ups spawn at random positions, avoiding player spawn areas. They incentivize leaving base to take risks for rewards.
+
 **Spawn Rates**: Normal kodos decrease over time, special types appear progressively (Armored/Swift from wave 4+, Frostborn/Venomous from wave 6+, Horde from wave 8+).
 
 ### Turret Types

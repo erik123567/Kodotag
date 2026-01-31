@@ -54,6 +54,7 @@ local COLORS = {
 	barricade = Color3.fromRGB(139, 90, 43),     -- Brown
 	farm = Color3.fromRGB(100, 200, 100),        -- Light green
 	workshop = Color3.fromRGB(200, 150, 100),    -- Tan
+	powerup = Color3.fromRGB(255, 255, 255),     -- White (pulsing)
 }
 
 -- Entity sizes on minimap
@@ -67,6 +68,7 @@ local SIZES = {
 	barricade = 3,
 	farm = 5,
 	workshop = 6,
+	powerup = 6,
 }
 
 -- Create minimap frame
@@ -291,6 +293,15 @@ local function updateMinimap()
 		end
 	end
 
+	-- Update power-ups (pulsing effect)
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name:find("PowerUp_") and obj:IsA("BasePart") then
+			local dot = updateDot("powerup_" .. tostring(obj), obj.Position, COLORS.powerup, SIZES.powerup, "circle")
+			-- Pulsing effect
+			dot.BackgroundTransparency = 0.2 + 0.3 * math.sin(tick() * 5)
+		end
+	end
+
 	-- Clean up dots for removed entities
 	cleanupHiddenDots()
 end
@@ -312,7 +323,7 @@ legendLayout.Parent = legendFrame
 local legendItems = {
 	{color = COLORS.player, text = "You"},
 	{color = COLORS.kodo, text = "Kodo"},
-	{color = COLORS.turret, text = "Turret"},
+	{color = COLORS.powerup, text = "Pickup"},
 }
 
 for _, item in ipairs(legendItems) do
