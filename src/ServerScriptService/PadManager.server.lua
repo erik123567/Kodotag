@@ -28,6 +28,14 @@ if not updatePadStatus then
 end
 
 local soloStartEvent = ReplicatedStorage:FindFirstChild("SoloStartRequest")
+
+-- Event to notify clients teleport is starting (for loading screen)
+local teleportStarting = ReplicatedStorage:FindFirstChild("TeleportStarting")
+if not teleportStarting then
+	teleportStarting = Instance.new("RemoteEvent")
+	teleportStarting.Name = "TeleportStarting"
+	teleportStarting.Parent = ReplicatedStorage
+end
 if not soloStartEvent then
 	soloStartEvent = Instance.new("RemoteEvent")
 	soloStartEvent.Name = "SoloStartRequest"
@@ -149,6 +157,12 @@ local function teleportPlayers(playerList, padType)
 		local teleportOptions = Instance.new("TeleportOptions")
 		teleportOptions.ReservedServerAccessCode = reservedCode
 		teleportOptions:SetTeleportData(gameData)
+
+		-- Notify clients that teleport is starting (show loading screen)
+		for _, p in ipairs(playerList) do
+			teleportStarting:FireClient(p)
+		end
+		task.wait(0.2)  -- Brief delay for loading screen to appear
 
 		-- Teleport players
 		print("Calling TeleportAsync...")

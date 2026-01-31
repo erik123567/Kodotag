@@ -187,6 +187,10 @@ local showWavePreview = Instance.new("RemoteEvent")
 showWavePreview.Name = "ShowWavePreview"
 showWavePreview.Parent = ReplicatedStorage
 
+local roundStarted = Instance.new("RemoteEvent")
+roundStarted.Name = "RoundStarted"
+roundStarted.Parent = ReplicatedStorage
+
 -- Wave preview timing
 local WAVE_PREVIEW_TIME = 5 -- Seconds to show preview before spawning
 
@@ -734,6 +738,9 @@ local function startRound()
 
 	print("Spawned " .. #alivePlayers .. " players")
 	RoundManager.broadcastGameState()
+
+	-- Notify clients that round has started (hide loading screen)
+	roundStarted:FireAllClients()
 
 	wait(2)
 
