@@ -5,6 +5,71 @@ local PhysicsService = game:GetService("PhysicsService")
 
 local KodoAI = {}
 
+-- Kodo Types with resistances and weaknesses
+-- Multipliers: < 1 = resistant, > 1 = weak, 0 = immune
+KodoAI.KODO_TYPES = {
+	Normal = {
+		name = "Kodo",
+		color = Color3.fromRGB(139, 90, 43), -- Brown
+		resistances = {},
+		speedMult = 1.0,
+		healthMult = 1.0
+	},
+	Armored = {
+		name = "Armored Kodo",
+		color = Color3.fromRGB(100, 100, 110), -- Gray
+		resistances = {
+			physical = 0.5,    -- 50% physical resistance
+			poison = 1.5,      -- 50% extra poison damage
+			aoe = 1.5          -- 50% extra AOE damage
+		},
+		speedMult = 0.85,
+		healthMult = 1.3
+	},
+	Swift = {
+		name = "Swift Kodo",
+		color = Color3.fromRGB(220, 220, 230), -- White
+		resistances = {
+			poison = 0.7,      -- 30% poison resistance (fast metabolism)
+			frost = 1.5        -- 50% more effective slows
+		},
+		speedMult = 1.4,
+		healthMult = 0.7
+	},
+	Frostborn = {
+		name = "Frostborn Kodo",
+		color = Color3.fromRGB(100, 180, 255), -- Ice Blue
+		resistances = {
+			frost = 0,         -- Immune to frost
+			physical = 1.3     -- 30% extra physical damage
+		},
+		speedMult = 0.95,
+		healthMult = 1.1
+	},
+	Venomous = {
+		name = "Venomous Kodo",
+		color = Color3.fromRGB(50, 180, 50), -- Green
+		resistances = {
+			poison = 0,        -- Immune to poison
+			frost = 1.3        -- 30% extra frost damage
+		},
+		speedMult = 1.0,
+		healthMult = 1.0
+	},
+	Horde = {
+		name = "Horde Kodo",
+		color = Color3.fromRGB(180, 60, 60), -- Dark Red
+		resistances = {
+			physical = 0.8,    -- 20% physical resistance
+			aoe = 2.0,         -- Double AOE damage
+			multishot = 2.0    -- Double multishot damage
+		},
+		speedMult = 1.2,
+		healthMult = 0.5,
+		sizeMult = 0.7         -- Smaller
+	}
+}
+
 -- Settings
 local CHASE_RANGE = 300
 local BASE_MOVE_SPEED = 16
@@ -28,8 +93,21 @@ local function setupCollisionGroups()
 	collisionGroupsSetup = true
 end
 
+-- Get damage multiplier based on kodo type and damage type
+function KodoAI.getDamageMultiplier(kodo, damageType)
+	local typeValue = kodo:FindFirstChild("KodoType")
+	local kodoType = typeValue and typeValue.Value or "Normal"
+	local typeConfig = KodoAI.KODO_TYPES[kodoType]
+
+	if not typeConfig or not typeConfig.resistances then
+		return 1.0
+	end
+
+	return typeConfig.resistances[damageType] or 1.0
+end
+
 -- Create health bar
-local function createHealthBar(kodo, isBoss)
+local function createHealthBar(kodo, isBoss, typeName)
 	local humanoid = kodo:FindFirstChild("Humanoid")
 	local rootPart = kodo:FindFirstChild("HumanoidRootPart")
 
@@ -43,20 +121,38 @@ local function createHealthBar(kodo, isBoss)
 	billboard.Adornee = rootPart
 	billboard.Parent = rootPart
 
-	-- Boss label
-	if isBoss then
-		local bossLabel = Instance.new("TextLabel")
-		bossLabel.Name = "BossLabel"
-		bossLabel.Size = UDim2.new(1, 0, 0.6, 0)
-		bossLabel.Position = UDim2.new(0, 0, -0.7, 0)
-		bossLabel.BackgroundTransparency = 1
-		bossLabel.Text = "BOSS"
-		bossLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
-		bossLabel.TextScaled = true
-		bossLabel.Font = Enum.Font.GothamBlack
-		bossLabel.TextStrokeTransparency = 0
-		bossLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-		bossLabel.Parent = billboard
+	-- Type/Boss label
+	local showLabel = isBoss or (typeName and typeName ~= "Kodo")
+	if showLabel then
+		local typeLabel = Instance.new("TextLabel")
+		typeLabel.Name = "TypeLabel"
+		typeLabel.Size = UDim2.new(1, 0, 0.6, 0)
+		typeLabel.Position = UDim2.new(0, 0, -0.7, 0)
+		typeLabel.BackgroundTransparency = 1
+		typeLabel.Text = isBoss and "BOSS" or (typeName or "Kodo")
+		typeLabel.TextScaled = true
+		typeLabel.Font = Enum.Font.GothamBold
+		typeLabel.TextStrokeTransparency = 0
+		typeLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+		typeLabel.Parent = billboard
+
+		-- Color based on type
+		if isBoss then
+			typeLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
+			typeLabel.Font = Enum.Font.GothamBlack
+		elseif typeName == "Armored Kodo" then
+			typeLabel.TextColor3 = Color3.new(0.7, 0.7, 0.8)
+		elseif typeName == "Swift Kodo" then
+			typeLabel.TextColor3 = Color3.new(1, 1, 1)
+		elseif typeName == "Frostborn Kodo" then
+			typeLabel.TextColor3 = Color3.new(0.5, 0.8, 1)
+		elseif typeName == "Venomous Kodo" then
+			typeLabel.TextColor3 = Color3.new(0.3, 1, 0.3)
+		elseif typeName == "Horde Kodo" then
+			typeLabel.TextColor3 = Color3.new(1, 0.4, 0.4)
+		else
+			typeLabel.TextColor3 = Color3.new(1, 1, 1)
+		end
 	end
 
 	local background = Instance.new("Frame")
@@ -109,25 +205,36 @@ local function createHealthBar(kodo, isBoss)
 	end)
 end
 
-function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth, customDamage, isBoss)
+function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth, customDamage, isBoss, kodoType)
 	setupCollisionGroups()
+
+	-- Get kodo type config (default to Normal)
+	local typeConfig = KodoAI.KODO_TYPES[kodoType] or KodoAI.KODO_TYPES.Normal
+	kodoType = kodoType or "Normal"
 
 	local kodo = kodoTemplate:Clone()
 	kodo.Parent = workspace
+
+	-- Store kodo type for damage calculations
+	local typeValue = Instance.new("StringValue")
+	typeValue.Name = "KodoType"
+	typeValue.Value = kodoType
+	typeValue.Parent = kodo
 
 	local rootPart = kodo:FindFirstChild("HumanoidRootPart")
 	if rootPart then
 		rootPart.CFrame = CFrame.new(spawnPosition + Vector3.new(0, 5, 0))
 	end
 
+	-- Apply type multipliers to stats
+	local finalSpeed = (customSpeed or BASE_MOVE_SPEED) * typeConfig.speedMult
+	local finalHealth = math.floor((customHealth or 100) * typeConfig.healthMult)
+
 	local humanoid = kodo:FindFirstChild("Humanoid")
 	if humanoid then
-		humanoid.WalkSpeed = customSpeed or BASE_MOVE_SPEED
-
-		-- Set custom health
-		local health = customHealth or 100
-		humanoid.MaxHealth = health
-		humanoid.Health = health
+		humanoid.WalkSpeed = finalSpeed
+		humanoid.MaxHealth = finalHealth
+		humanoid.Health = finalHealth
 
 		-- Connect Died event IMMEDIATELY after creating Kodo
 		humanoid.Died:Connect(function()
@@ -144,7 +251,18 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth
 	damageValue.Value = customDamage or STRUCTURE_ATTACK_DAMAGE
 	damageValue.Parent = kodo
 
-	-- Boss visuals
+	-- Apply type visuals (color and size)
+	local sizeMult = typeConfig.sizeMult or 1.0
+	for _, part in ipairs(kodo:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Color = typeConfig.color
+			if sizeMult ~= 1.0 then
+				part.Size = part.Size * sizeMult
+			end
+		end
+	end
+
+	-- Boss visuals (override type color with dark red, make bigger)
 	if isBoss then
 		local bossTag = Instance.new("BoolValue")
 		bossTag.Name = "IsBoss"
@@ -172,7 +290,10 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth
 		end
 	end
 
-	createHealthBar(kodo, isBoss)
+	-- Update kodo name to show type
+	kodo.Name = typeConfig.name
+
+	createHealthBar(kodo, isBoss, typeConfig.name)
 	KodoAI.runAI(kodo)
 
 	return kodo

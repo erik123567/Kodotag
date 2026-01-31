@@ -10,28 +10,45 @@ end
 local TurretManager = {}
 TurretManager.activeTurrets = {}
 
--- Turret stats
+-- Load KodoAI for damage multipliers
+local KodoAI = require(script.Parent.KodoAI)
+
+-- Map turret types to damage categories for resistance calculations
+local TURRET_DAMAGE_TYPES = {
+	Turret = "physical",
+	FastTurret = "physical",
+	SlowTurret = "physical",
+	FrostTurret = "frost",
+	PoisonTurret = "poison",
+	MultiShotTurret = "multishot",
+	CannonTurret = "aoe"
+}
+
+-- Turret stats with damage types for resistance calculations
 local TURRET_STATS = {
 	Turret = {
 		damage = 50,
 		fireRate = 0.5,
 		range = 50,
 		projectileSpeed = 100,
-		projectileColor = Color3.new(1, 0.8, 0)
+		projectileColor = Color3.new(1, 0.8, 0),
+		damageType = "physical"
 	},
 	FastTurret = {
 		damage = 40,
 		fireRate = 0.2,
 		range = 40,
 		projectileSpeed = 120,
-		projectileColor = Color3.new(0, 1, 1)
+		projectileColor = Color3.new(0, 1, 1),
+		damageType = "physical"
 	},
 	SlowTurret = {
 		damage = 60,
 		fireRate = 1.0,
 		range = 60,
 		projectileSpeed = 80,
-		projectileColor = Color3.new(1, 0, 0)
+		projectileColor = Color3.new(1, 0, 0),
+		damageType = "physical"
 	},
 	FrostTurret = {
 		damage = 20,
@@ -39,6 +56,7 @@ local TURRET_STATS = {
 		range = 45,
 		projectileSpeed = 90,
 		projectileColor = Color3.new(0.5, 0.8, 1),
+		damageType = "frost",
 		specialEffect = "frost",
 		slowAmount = 0.5, -- 50% speed reduction
 		slowDuration = 3
@@ -49,6 +67,7 @@ local TURRET_STATS = {
 		range = 50,
 		projectileSpeed = 80,
 		projectileColor = Color3.new(0.2, 0.8, 0.2),
+		damageType = "poison",
 		specialEffect = "poison",
 		poisonDamage = 10,
 		poisonDuration = 5,
@@ -60,6 +79,7 @@ local TURRET_STATS = {
 		range = 40,
 		projectileSpeed = 110,
 		projectileColor = Color3.new(1, 0.5, 0),
+		damageType = "multishot",
 		specialEffect = "multishot",
 		projectileCount = 3
 	},
@@ -69,6 +89,7 @@ local TURRET_STATS = {
 		range = 55,
 		projectileSpeed = 60,
 		projectileColor = Color3.new(0.3, 0.3, 0.3),
+		damageType = "aoe",
 		specialEffect = "aoe",
 		aoeRadius = 15,
 		aoeDamageFalloff = 0.5 -- enemies at edge take 50% damage
@@ -104,13 +125,18 @@ local function createMuzzleFlash(turret, color)
 end
 
 -- Apply frost effect (slow)
-local function applyFrostEffect(target, stats)
+local function applyFrostEffect(target, stats, multiplier)
 	local humanoid = target:FindFirstChild("Humanoid")
 	if not humanoid then return end
 
+	multiplier = multiplier or 1.0
+	if multiplier == 0 then return end -- Immune
+
 	local originalSpeed = humanoid.WalkSpeed
 	local currentTime = tick()
-	local endTime = currentTime + stats.slowDuration
+	-- More effective slow on weak targets
+	local effectiveDuration = stats.slowDuration * (multiplier > 1 and 1.5 or 1)
+	local endTime = currentTime + effectiveDuration
 
 	-- Check if already frosted
 	if activeEffects.frost[target] and activeEffects.frost[target] > currentTime then
@@ -120,7 +146,12 @@ local function applyFrostEffect(target, stats)
 	end
 
 	activeEffects.frost[target] = endTime
-	humanoid.WalkSpeed = originalSpeed * stats.slowAmount
+	-- More effective slow on weak targets
+	local slowAmount = stats.slowAmount
+	if multiplier > 1 then
+		slowAmount = slowAmount * 0.7 -- Even slower (30% more slow)
+	end
+	humanoid.WalkSpeed = originalSpeed * slowAmount
 
 	-- Visual frost effect
 	local frostEffect = Instance.new("Part")
@@ -158,23 +189,32 @@ local function applyFrostEffect(target, stats)
 end
 
 -- Apply poison effect (DoT)
-local function applyPoisonEffect(target, stats)
+local function applyPoisonEffect(target, stats, multiplier)
 	local humanoid = target:FindFirstChild("Humanoid")
 	if not humanoid then return end
 
-	local currentTime = tick()
-	local endTime = currentTime + stats.poisonDuration
+	multiplier = multiplier or 1.0
+	if multiplier == 0 then return end -- Immune
 
-	-- Check if already poisoned - refresh duration
+	local currentTime = tick()
+	-- More effective duration on weak targets
+	local effectiveDuration = stats.poisonDuration * (multiplier > 1 and 1.5 or 1)
+	local endTime = currentTime + effectiveDuration
+
+	-- Calculate effective damage
+	local effectiveDamage = math.floor(stats.poisonDamage * multiplier)
+
+	-- Check if already poisoned - refresh duration and use higher damage
 	if activeEffects.poison[target] then
 		activeEffects.poison[target].endTime = endTime
+		activeEffects.poison[target].damage = math.max(activeEffects.poison[target].damage, effectiveDamage)
 		return
 	end
 
 	activeEffects.poison[target] = {
 		endTime = endTime,
 		nextTickTime = currentTime + stats.poisonTickRate,
-		damage = stats.poisonDamage
+		damage = effectiveDamage
 	}
 
 	-- Visual poison effect
@@ -243,16 +283,22 @@ local function applyAOEDamage(position, stats)
 		if humanoid then
 			-- Calculate damage falloff
 			local falloff = 1 - (kodoData.distance / stats.aoeRadius) * (1 - stats.aoeDamageFalloff)
-			local damage = math.floor(stats.damage * falloff)
+			local baseDamage = math.floor(stats.damage * falloff)
 
-			local newHealth = humanoid.Health - damage
+			-- Apply resistance multiplier
+			local multiplier = KodoAI.getDamageMultiplier(kodoData.kodo, "aoe")
+			local finalDamage = math.floor(baseDamage * multiplier)
+
+			local newHealth = humanoid.Health - finalDamage
 			if newHealth <= 0 then
 				humanoid.Health = 0
 				print("TurretManager: Kodo killed by AOE!")
 			else
 				humanoid.Health = newHealth
 			end
-			print("TurretManager: AOE dealt", damage, "damage to", kodoData.kodo.Name)
+
+			local damageText = finalDamage .. (multiplier > 1 and " (Weak)" or (multiplier < 1 and " (Resist)" or ""))
+			print("TurretManager: AOE dealt", damageText, "to", kodoData.kodo.Name)
 		end
 	end
 
@@ -343,11 +389,24 @@ local function fireSingleProjectile(turret, target, stats, offset)
 			if stats.specialEffect == "aoe" then
 				applyAOEDamage(impactPosition, stats)
 			else
-				-- Normal damage
+				-- Normal damage with resistance check
 				local humanoid = target:FindFirstChild("Humanoid")
 				if humanoid and humanoid.Health > 0 then
-					local newHealth = humanoid.Health - stats.damage
-					print("TurretManager: Dealt", stats.damage, "damage to Kodo. Health:", humanoid.Health, "->", newHealth)
+					-- Get damage multiplier based on kodo type
+					local damageType = stats.damageType or "physical"
+					local multiplier = KodoAI.getDamageMultiplier(target, damageType)
+					local finalDamage = math.floor(stats.damage * multiplier)
+
+					-- Show resistance/weakness indicator
+					local damageText = finalDamage
+					if multiplier < 1 then
+						damageText = damageText .. " (Resist)"
+					elseif multiplier > 1 then
+						damageText = damageText .. " (Weak)"
+					end
+
+					local newHealth = humanoid.Health - finalDamage
+					print("TurretManager: Dealt", damageText, "to", target.Name, ". Health:", humanoid.Health, "->", math.max(0, newHealth))
 
 					if newHealth <= 0 then
 						humanoid.Health = 0
@@ -356,11 +415,15 @@ local function fireSingleProjectile(turret, target, stats, offset)
 						humanoid.Health = newHealth
 					end
 
-					-- Apply special effects
+					-- Apply special effects (frost effectiveness also affected)
 					if stats.specialEffect == "frost" then
-						applyFrostEffect(target, stats)
+						if multiplier > 0 then -- Not immune
+							applyFrostEffect(target, stats, multiplier)
+						end
 					elseif stats.specialEffect == "poison" then
-						applyPoisonEffect(target, stats)
+						if multiplier > 0 then -- Not immune
+							applyPoisonEffect(target, stats, multiplier)
+						end
 					end
 				end
 			end

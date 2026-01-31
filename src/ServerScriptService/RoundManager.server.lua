@@ -77,6 +77,53 @@ local ELITE_HEALTH_MULTIPLIER = 2.5 -- But much stronger
 local ELITE_DAMAGE_MULTIPLIER = 1.5
 local ELITE_GOLD_MULTIPLIER = 2     -- More gold reward
 
+-- Kodo Types - spawn chances increase with wave number
+local KODO_TYPES = {"Normal", "Armored", "Swift", "Frostborn", "Venomous", "Horde"}
+local function getKodoTypeForWave(wave, isSwarmWave)
+	-- Swarm waves always spawn Horde kodos
+	if isSwarmWave then
+		return "Horde"
+	end
+
+	-- Early waves: mostly normal
+	if wave <= 3 then
+		return "Normal"
+	end
+
+	-- Calculate spawn weights based on wave
+	local weights = {
+		Normal = math.max(50 - wave * 3, 10),     -- Decreases over time
+		Armored = math.min(wave * 2, 20),          -- Increases slowly
+		Swift = math.min(wave * 2, 20),            -- Increases slowly
+		Frostborn = math.min((wave - 5) * 2, 15),  -- Appears after wave 5
+		Venomous = math.min((wave - 5) * 2, 15),   -- Appears after wave 5
+		Horde = math.min((wave - 7) * 3, 20)       -- Appears after wave 7
+	}
+
+	-- Clamp negative weights to 0
+	for k, v in pairs(weights) do
+		weights[k] = math.max(v, 0)
+	end
+
+	-- Calculate total weight
+	local totalWeight = 0
+	for _, w in pairs(weights) do
+		totalWeight = totalWeight + w
+	end
+
+	-- Pick random type based on weights
+	local roll = math.random() * totalWeight
+	local cumulative = 0
+	for kodoType, weight in pairs(weights) do
+		cumulative = cumulative + weight
+		if roll <= cumulative then
+			return kodoType
+		end
+	end
+
+	return "Normal"
+end
+
 -- References
 local gameArea = workspace:FindFirstChild("GameArea")
 if not gameArea then
@@ -497,12 +544,14 @@ local function spawnKodoWave()
 		end
 
 		if kodoSpawn then
-			local kodo = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, kodoSpeed, kodoHealth, kodoDamage, false)
+			-- Determine kodo type for this spawn
+			local kodoType = getKodoTypeForWave(currentWave, isSwarmWave)
+			local kodo = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, kodoSpeed, kodoHealth, kodoDamage, false, kodoType)
 
 			if kodo then
 				table.insert(activeKodos, kodo)
 				connectKodoDeath(kodo, false, goldMultiplier)
-				print("RoundManager: Spawned Kodo #" .. i)
+				print("RoundManager: Spawned " .. kodoType .. " Kodo #" .. i)
 			end
 		end
 	end
@@ -526,7 +575,8 @@ local function spawnKodoWave()
 			end
 
 			if kodoSpawn then
-				local boss = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, bossSpeed, bossHealth, bossDamage, true)
+				-- Boss is always Normal type (no special resistances, just big and tough)
+				local boss = KodoAI.spawnKodo(kodoTemplate, kodoSpawn.Position, bossSpeed, bossHealth, bossDamage, true, "Normal")
 
 				if boss then
 					table.insert(activeKodos, boss)

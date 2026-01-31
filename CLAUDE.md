@@ -100,21 +100,43 @@ local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerI
 - **Pad type difficulty**: SOLO is easier, LARGE is harder
 - **Special waves**:
   - Boss waves (every 5): One powerful boss Kodo
-  - Swarm waves (every 7): Triple kodos, but weaker and faster
+  - Swarm waves (every 7): Triple kodos, but weaker and faster (all Horde type)
   - Elite waves (every 10): Half kodos, but much stronger, 2x gold
+
+### Kodo Types & Turret Counters
+| Kodo Type | Color | Resistances | Weaknesses | Best Counter |
+|-----------|-------|-------------|------------|--------------|
+| Normal | Brown | None | None | Any turret |
+| Armored | Gray | -50% physical | +50% poison, AOE | Poison, Cannon |
+| Swift | White | -30% poison, Fast | +50% frost effect | Frost Turret |
+| Frostborn | Ice Blue | Immune to frost | +30% physical | Basic turrets |
+| Venomous | Green | Immune to poison | +30% frost | Frost Turret |
+| Horde | Dark Red | -20% physical, Small | +100% AOE/multishot | Cannon, MultiShot |
+
+**Spawn Rates**: Normal kodos decrease over time, special types appear progressively (Armored/Swift from wave 4+, Frostborn/Venomous from wave 6+, Horde from wave 8+).
+
+### Turret Types
+| Turret | Cost | Damage Type | Special | Best Against |
+|--------|------|-------------|---------|--------------|
+| Turret | 50g | Physical | Balanced | Frostborn |
+| FastTurret | 75g | Physical | Rapid fire | Frostborn |
+| SlowTurret | 30g | Physical | High damage | Frostborn |
+| FrostTurret | 100g | Frost | 50% slow, 3s | Swift, Venomous |
+| PoisonTurret | 90g | Poison | 10 DPS, 5s | Armored |
+| MultiShotTurret | 120g | Multishot | 3 projectiles | Horde |
+| CannonTurret | 150g | AOE | 15 radius | Armored, Horde |
 
 ### Next Steps (Suggested)
 1. **All-Players Leaderboard** - Show everyone's stats on game over screen
 2. **High Score Tracking** - Save best wave reached (DataStore)
-3. **Kodo Variety** - Different Kodo types with unique abilities
-4. **Death Abilities** - Dead players can help survivors (from original WC3)
-5. **Map Variations** - Different maps for SOLO vs LARGE games
+3. **Death Abilities** - Dead players can help survivors (from original WC3)
+4. **Map Variations** - Different maps for SOLO vs LARGE games
+5. **Visual damage indicators** - Show resist/weak floating text
 
 ### Features to Consider (from Original)
 - **Maze Mode vs Bunker Mode** - Toggle whether Kodos only attack buildings when blocked
 - **Death Abilities** - Dead players can spend gold to help teammates (slow Kodos, heal, etc.)
 - **Runner Variety** - Different player classes with unique abilities
-- **Kodo Variety** - Different Kodo types (fast, tanky, special abilities)
 - **Central Shop** - Powerful items purchasable mid-game
 - **30-Minute Timer** - Classic survival win condition as alternative to waves
 - **Income Towers** - Towers that generate gold when attacking
