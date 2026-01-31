@@ -114,17 +114,18 @@ local function updateUI(data)
 	end
 	modeLabel.Text = modeText
 
-	-- Update player count
+	-- Update player count (hide for solo pads)
 	local count = data.count or 0
 	local maxPlayers = data.maxPlayers or 1
-	countLabel.Text = count .. "/" .. maxPlayers .. " Players"
 
 	-- Update status based on pad type and state
 	if data.padType == "SOLO" then
+		countLabel.Text = ""  -- Hide player count for solo
 		statusLabel.Text = "Press E to Start"
 		statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
 		statusLabel.BackgroundColor3 = Color3.new(0.2, 0.5, 0.3)
 	else
+		countLabel.Text = count .. "/" .. maxPlayers .. " Players"
 		-- Multiplayer pad
 		local minPlayers = data.minPlayers or 2
 
