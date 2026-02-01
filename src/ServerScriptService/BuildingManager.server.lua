@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local TweenService = game:GetService("TweenService")
 
 -- Only run on game servers (reserved servers)
 local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
@@ -27,7 +28,13 @@ local BUILD_TIMES = {
 	Barricade = 1,  -- Fast maze building
 	Wall = 4,       -- Heavy defensive wall
 	Farm = 5,
-	Workshop = 10
+	Workshop = 10,
+	-- Aura buildings
+	SpeedAura = 6,
+	DamageAura = 7,
+	FortifyAura = 6,
+	RangeAura = 7,
+	RegenAura = 8,
 }
 
 -- Turrets that require a workshop to build
@@ -89,7 +96,108 @@ if not getItemTemplateEvent then
 	getItemTemplateEvent.Parent = ReplicatedStorage
 end
 
+-- Create assist construction event
+local assistConstructionEvent = ReplicatedStorage:FindFirstChild("AssistConstruction")
+if not assistConstructionEvent then
+	assistConstructionEvent = Instance.new("RemoteEvent")
+	assistConstructionEvent.Name = "AssistConstruction"
+	assistConstructionEvent.Parent = ReplicatedStorage
+end
+
 print("BuildingManager: Created remote events")
+
+-- Track construction assist state
+local constructionAssists = {} -- [constructionSite] = {players = {}, speedMultiplier = 1}
+local ASSIST_RANGE = 15 -- Studs
+local ASSIST_SPEED_BONUS = 0.5 -- 50% faster per player assisting
+local ASSIST_COOLDOWN = 0.1 -- Seconds between assist ticks
+
+-- Track last assist time per player
+local lastAssistTime = {}
+
+-- Handle assist construction requests
+assistConstructionEvent.OnServerEvent:Connect(function(player, constructionSite)
+	-- Cooldown check
+	local now = tick()
+	if lastAssistTime[player.Name] and now - lastAssistTime[player.Name] < ASSIST_COOLDOWN then
+		return
+	end
+	lastAssistTime[player.Name] = now
+
+	-- Validate construction site
+	if not constructionSite or not constructionSite.Parent then
+		return
+	end
+
+	local underConstruction = constructionSite:FindFirstChild("UnderConstruction")
+	if not underConstruction or underConstruction.Value ~= true then
+		return
+	end
+
+	-- Validate ownership (can only assist your own buildings)
+	local owner = constructionSite:FindFirstChild("Owner")
+	if not owner or owner.Value ~= player.Name then
+		return
+	end
+
+	-- Validate distance
+	local character = player.Character
+	if not character then return end
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local structurePos
+	if constructionSite:IsA("Model") and constructionSite.PrimaryPart then
+		structurePos = constructionSite.PrimaryPart.Position
+	elseif constructionSite:IsA("BasePart") then
+		structurePos = constructionSite.Position
+	else
+		return
+	end
+
+	local distance = (hrp.Position - structurePos).Magnitude
+	if distance > ASSIST_RANGE then
+		return
+	end
+
+	-- Mark this construction as being assisted
+	if not constructionAssists[constructionSite] then
+		constructionAssists[constructionSite] = {players = {}, lastAssistTick = 0}
+	end
+	constructionAssists[constructionSite].players[player.Name] = now
+	constructionAssists[constructionSite].lastAssistTick = now
+end)
+
+-- Helper: Get assist speed multiplier for a construction site
+local function getAssistMultiplier(constructionSite)
+	local assistData = constructionAssists[constructionSite]
+	if not assistData then return 1 end
+
+	-- Count active assisters (assisted within last 0.3 seconds)
+	local now = tick()
+	local activeCount = 0
+	for playerName, lastTime in pairs(assistData.players) do
+		if now - lastTime < 0.3 then
+			activeCount = activeCount + 1
+		end
+	end
+
+	if activeCount > 0 then
+		return 1 + (ASSIST_SPEED_BONUS * activeCount)
+	end
+	return 1
+end
+
+-- Cleanup assist data when player leaves
+Players.PlayerRemoving:Connect(function(player)
+	lastAssistTime[player.Name] = nil
+	for site, data in pairs(constructionAssists) do
+		if data.players then
+			data.players[player.Name] = nil
+		end
+	end
+end)
 
 -- Helper: Get size of model or part
 local function getModelSize(template)
@@ -184,8 +292,13 @@ end
 local function getBaseHealth(categoryName, itemName)
 	-- Item-specific health overrides
 	local itemHealth = {
-		Barricade = 75,   -- Cheap maze obstacle
+		Barricade = 100,  -- Maze pillar
 		Wall = 500,       -- Heavy defensive wall
+		SpeedAura = 100,
+		DamageAura = 100,
+		FortifyAura = 150,
+		RangeAura = 100,
+		RegenAura = 125,
 	}
 
 	if itemHealth[itemName] then
@@ -205,15 +318,14 @@ local function getBaseHealth(categoryName, itemName)
 		return 150
 	elseif categoryName == "Utility" then
 		return 250
+	elseif categoryName == "Auras" then
+		return 100
 	end
 	return 100
 end
 
 -- Function: Add health to structure (with upgrade bonus)
 local function addHealthToStructure(structure, itemName, categoryName, playerName)
-	local health = Instance.new("IntValue")
-	health.Name = "Health"
-
 	local baseHealth = getBaseHealth(categoryName, itemName)
 
 	-- Apply Reinforced Structures upgrade bonus
@@ -223,10 +335,22 @@ local function addHealthToStructure(structure, itemName, categoryName, playerNam
 		healthBonus = 1.0 + bonusPercent
 	end
 
-	health.Value = math.floor(baseHealth * healthBonus)
-	print("BuildingManager: Added", health.Value, "HP to", itemName, "(base:", baseHealth, "bonus:", healthBonus .. "x)")
+	local finalHealth = math.floor(baseHealth * healthBonus)
 
+	-- Create Health value
+	local health = Instance.new("IntValue")
+	health.Name = "Health"
+	health.Value = finalHealth
 	health.Parent = structure
+
+	-- Create MaxHealth value (needed for health bars and aura buffs)
+	local maxHealth = Instance.new("IntValue")
+	maxHealth.Name = "MaxHealth"
+	maxHealth.Value = finalHealth
+	maxHealth.Parent = structure
+
+	print("BuildingManager: Added", finalHealth, "HP to", itemName, "(base:", baseHealth, "bonus:", healthBonus .. "x)")
+
 	return health
 end
 
@@ -289,39 +413,40 @@ local function createConstructionProgressBar(constructionSite, buildTime)
 	return billboard, progressBar, timeText
 end
 
--- Function: Create construction site
+-- Function: Create construction site using actual model (starts transparent)
 local function createConstructionSite(itemName, position, rotation, categoryName, playerName, template)
-	-- Get the size from template
-	local templateSize = Vector3.new(4, 4, 4)
-	if template:IsA("Model") then
-		local success, result = pcall(function()
-			local cf, size = template:GetBoundingBox()
-			return size
-		end)
-		if success then
-			templateSize = result
+	-- Clone the actual template
+	local constructionSite = template:Clone()
+	constructionSite.Name = itemName
+
+	-- Position the model
+	if constructionSite:IsA("Model") then
+		-- Ensure all parts are anchored
+		for _, part in ipairs(constructionSite:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Anchored = true
+				-- Start very transparent (construction starting)
+				part.Transparency = 0.8
+				-- Disable particles during construction
+			elseif part:IsA("ParticleEmitter") then
+				part.Enabled = false
+			elseif part:IsA("PointLight") or part:IsA("SpotLight") or part:IsA("SurfaceLight") then
+				part.Enabled = false
+			end
 		end
-	elseif template:IsA("BasePart") then
-		templateSize = template.Size
+
+		if constructionSite.PrimaryPart then
+			constructionSite.PrimaryPart.Anchored = true
+			local targetCFrame = CFrame.new(position) * CFrame.Angles(0, math.rad(rotation or 0), 0)
+			constructionSite:SetPrimaryPartCFrame(targetCFrame)
+		else
+			constructionSite:MoveTo(position)
+		end
+	elseif constructionSite:IsA("BasePart") then
+		constructionSite.Anchored = true
+		constructionSite.Transparency = 0.8
+		constructionSite.CFrame = CFrame.new(position) * CFrame.Angles(0, math.rad(rotation or 0), 0)
 	end
-
-	-- Create construction site model
-	local constructionSite = Instance.new("Model")
-	constructionSite.Name = itemName -- Use the same name for collision detection
-
-	-- Create base scaffold
-	local scaffold = Instance.new("Part")
-	scaffold.Name = "Scaffold"
-	scaffold.Size = templateSize
-	scaffold.Anchored = true
-	scaffold.CanCollide = true
-	scaffold.Material = Enum.Material.WoodPlanks
-	scaffold.Color = Color3.new(0.6, 0.5, 0.3)
-	scaffold.Transparency = 0.3
-	scaffold.CFrame = CFrame.new(position) * CFrame.Angles(0, math.rad(rotation or 0), 0)
-	scaffold.Parent = constructionSite
-
-	constructionSite.PrimaryPart = scaffold
 
 	-- Add markers
 	local underConstruction = Instance.new("BoolValue")
@@ -329,10 +454,13 @@ local function createConstructionSite(itemName, position, rotation, categoryName
 	underConstruction.Value = true
 	underConstruction.Parent = constructionSite
 
-	local ownerValue = Instance.new("StringValue")
-	ownerValue.Name = "Owner"
+	local ownerValue = constructionSite:FindFirstChild("Owner")
+	if not ownerValue then
+		ownerValue = Instance.new("StringValue")
+		ownerValue.Name = "Owner"
+		ownerValue.Parent = constructionSite
+	end
 	ownerValue.Value = playerName
-	ownerValue.Parent = constructionSite
 
 	-- Store build info
 	local buildInfo = Instance.new("Folder")
@@ -362,62 +490,153 @@ local function createConstructionSite(itemName, position, rotation, categoryName
 	health.Value = math.floor(baseHealth * healthBonus * 0.5) -- 50% health during construction
 	health.Parent = constructionSite
 
+	local maxHealth = Instance.new("IntValue")
+	maxHealth.Name = "MaxHealth"
+	maxHealth.Value = math.floor(baseHealth * healthBonus)
+	maxHealth.Parent = constructionSite
+
 	constructionSite.Parent = workspace
 
 	return constructionSite
 end
 
--- Function: Complete construction
+-- Function: Update construction site transparency based on progress
+local function updateConstructionTransparency(constructionSite, progress)
+	if not constructionSite or not constructionSite.Parent then return end
+
+	-- progress goes from 0 to 1
+	-- transparency goes from 0.8 (start) to 0 (complete)
+	local targetTransparency = 0.8 * (1 - progress)
+
+	pcall(function()
+		if constructionSite:IsA("Model") then
+			for _, part in ipairs(constructionSite:GetDescendants()) do
+				if part:IsA("BasePart") and part.Parent then
+					-- Keep crystals and special parts slightly transparent
+					if part.Name == "Crystal" then
+						part.Transparency = math.max(0.3, targetTransparency)
+					else
+						part.Transparency = targetTransparency
+					end
+				end
+			end
+		elseif constructionSite:IsA("BasePart") then
+			constructionSite.Transparency = targetTransparency
+		end
+	end)
+end
+
+-- Function: Apply completion effect (sparkles and flash, no size change)
+local function applyCompletionEffect(item)
+	local centerPart = item:IsA("Model") and item.PrimaryPart or item
+	if not centerPart then return end
+
+	-- Create sparkle particles
+	local sparkleAttachment = Instance.new("Attachment")
+	sparkleAttachment.Parent = centerPart
+
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Color = ColorSequence.new(Color3.new(1, 0.9, 0.3))
+	sparkles.LightEmission = 1
+	sparkles.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(0.5, 0.3),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	sparkles.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	sparkles.Lifetime = NumberRange.new(0.3, 0.6)
+	sparkles.Rate = 0
+	sparkles.Speed = NumberRange.new(5, 10)
+	sparkles.SpreadAngle = Vector2.new(180, 180)
+	sparkles.Parent = sparkleAttachment
+
+	-- Burst of sparkles
+	sparkles:Emit(15)
+
+	-- Flash effect
+	local flash = Instance.new("PointLight")
+	flash.Color = Color3.new(1, 0.9, 0.5)
+	flash.Brightness = 3
+	flash.Range = 15
+	flash.Parent = centerPart
+
+	task.spawn(function()
+		for i = 1, 10 do
+			flash.Brightness = 3 * (1 - i/10)
+			task.wait(0.03)
+		end
+		flash:Destroy()
+	end)
+
+	-- Clean up sparkles after they fade
+	task.delay(1, function()
+		sparkleAttachment:Destroy()
+	end)
+end
+
+-- Function: Complete construction (finalize the existing model)
 local function completeConstruction(constructionSite, template, playerName, categoryName)
 	if not constructionSite or not constructionSite.Parent then
 		print("BuildingManager: Construction site was destroyed before completion")
 		return nil
 	end
 
-	local position = constructionSite.PrimaryPart.Position
-	local buildInfo = constructionSite:FindFirstChild("BuildInfo")
-	local rotation = buildInfo and buildInfo:FindFirstChild("Rotation") and buildInfo.Rotation.Value or 0
-
-	-- Remove construction site
-	constructionSite:Destroy()
-
-	-- Clone and place actual item
-	local newItem = template:Clone()
-
-	if newItem:IsA("Model") then
-		newItem:MoveTo(position)
-		if newItem.PrimaryPart then
-			newItem.PrimaryPart.Anchored = true
-		end
-		for _, part in ipairs(newItem:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.Anchored = true
-			end
-		end
-		if rotation and newItem.PrimaryPart then
-			local currentCFrame = newItem:GetPrimaryPartCFrame()
-			newItem:SetPrimaryPartCFrame(currentCFrame * CFrame.Angles(0, math.rad(rotation), 0))
-		end
-	elseif newItem:IsA("BasePart") then
-		newItem.Position = position
-		newItem.Anchored = true
-		if rotation then
-			newItem.CFrame = CFrame.new(position) * CFrame.Angles(0, math.rad(rotation), 0)
+	-- Remove construction progress bar
+	for _, descendant in ipairs(constructionSite:GetDescendants()) do
+		if descendant:IsA("BillboardGui") and descendant.Name == "ConstructionProgress" then
+			descendant:Destroy()
+			break
 		end
 	end
 
-	-- Add full health
-	addHealthToStructure(newItem, newItem.Name, categoryName, playerName)
+	-- Remove construction markers
+	local underConstruction = constructionSite:FindFirstChild("UnderConstruction")
+	if underConstruction then
+		underConstruction.Value = false
+	end
 
-	-- Add owner
-	local ownerValue = Instance.new("StringValue")
-	ownerValue.Name = "Owner"
-	ownerValue.Value = playerName
-	ownerValue.Parent = newItem
+	local buildInfo = constructionSite:FindFirstChild("BuildInfo")
+	if buildInfo then
+		buildInfo:Destroy()
+	end
 
-	newItem.Parent = workspace
+	-- Set final transparency and enable effects
+	if constructionSite:IsA("Model") then
+		for _, part in ipairs(constructionSite:GetDescendants()) do
+			if part:IsA("BasePart") then
+				-- Final transparency (0 for most parts, 0.3 for crystals)
+				if part.Name == "Crystal" then
+					part.Transparency = 0.3
+				else
+					part.Transparency = 0
+				end
+			elseif part:IsA("ParticleEmitter") then
+				part.Enabled = true
+			elseif part:IsA("PointLight") or part:IsA("SpotLight") or part:IsA("SurfaceLight") then
+				part.Enabled = true
+			end
+		end
+	elseif constructionSite:IsA("BasePart") then
+		constructionSite.Transparency = 0
+	end
 
-	return newItem
+	-- Update health to full
+	local health = constructionSite:FindFirstChild("Health")
+	local maxHealth = constructionSite:FindFirstChild("MaxHealth")
+	if health and maxHealth then
+		health.Value = maxHealth.Value
+	elseif not health then
+		-- Add health if missing
+		addHealthToStructure(constructionSite, constructionSite.Name, categoryName, playerName)
+	end
+
+	-- Apply completion effect (sparkles and flash)
+	applyCompletionEffect(constructionSite)
+
+	return constructionSite
 end
 
 -- Function: Handle item placement WITH ROTATION
@@ -463,11 +682,11 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 	-- Create dynamic templates for items that don't have pre-made templates
 	if not template then
 		if itemName == "Barricade" then
-			-- Create Barricade template dynamically (small pillar for maze building)
-			-- 2x5x2 size creates 3-stud gaps on 5-stud grid - players fit, Kodos don't
+			-- Create Barricade template dynamically (pillar for maze building)
+			-- 3x6x3 size creates 2-stud gaps on 5-stud grid - players squeeze through, Kodos can't
 			template = Instance.new("Part")
 			template.Name = "Barricade"
-			template.Size = Vector3.new(2, 5, 2)
+			template.Size = Vector3.new(3, 6, 3)
 			template.Material = Enum.Material.Wood
 			template.BrickColor = BrickColor.new("Brown")
 			template.Anchored = true
@@ -481,9 +700,10 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 			print("BuildingManager: Created dynamic Barricade template")
 		elseif itemName == "Wall" then
 			-- Create Wall template dynamically (reinforced wall)
+			-- 10x8x2 - wide defensive barrier, taller than Kodo (7.5)
 			template = Instance.new("Part")
 			template.Name = "Wall"
-			template.Size = Vector3.new(12, 8, 2)
+			template.Size = Vector3.new(10, 8, 2)
 			template.Material = Enum.Material.Concrete
 			template.BrickColor = BrickColor.new("Medium stone grey")
 			template.Anchored = true
@@ -495,6 +715,100 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 
 			categoryName = "Defense"
 			print("BuildingManager: Created dynamic Wall template")
+		elseif itemName:find("Aura") then
+			-- Create Aura building template dynamically
+			local auraColors = {
+				SpeedAura = Color3.fromRGB(255, 200, 50),
+				DamageAura = Color3.fromRGB(255, 80, 80),
+				FortifyAura = Color3.fromRGB(100, 200, 255),
+				RangeAura = Color3.fromRGB(150, 255, 150),
+				RegenAura = Color3.fromRGB(100, 255, 200),
+			}
+			local auraCosts = {
+				SpeedAura = 150,
+				DamageAura = 200,
+				FortifyAura = 175,
+				RangeAura = 225,
+				RegenAura = 250,
+			}
+			local auraRanges = {
+				SpeedAura = 25,
+				DamageAura = 25,
+				FortifyAura = 30,
+				RangeAura = 25,
+				RegenAura = 30,
+			}
+
+			local auraModel = Instance.new("Model")
+			auraModel.Name = itemName
+
+			-- Base pillar - 4x6x4, taller to be visible over walls
+			-- Total height ~8 studs (base 6 + crystal 3, overlapping slightly)
+			local base = Instance.new("Part")
+			base.Name = "Base"
+			base.Size = Vector3.new(4, 6, 4)
+			base.CFrame = CFrame.new(0, 0, 0) -- Will be positioned by MoveTo
+			base.Material = Enum.Material.SmoothPlastic
+			base.Color = auraColors[itemName] or Color3.new(1, 1, 1)
+			base.Anchored = true
+			base.CanCollide = true
+			base.Parent = auraModel
+
+			-- Crystal on top - positioned so total height is ~8 studs
+			local crystal = Instance.new("Part")
+			crystal.Name = "Crystal"
+			crystal.Size = Vector3.new(2, 3, 2)
+			crystal.CFrame = CFrame.new(0, 5, 0) -- Higher up for taller total height
+			crystal.Material = Enum.Material.Neon
+			crystal.Color = auraColors[itemName] or Color3.new(1, 1, 1)
+			crystal.Anchored = true
+			crystal.CanCollide = false
+			crystal.Transparency = 0.3
+			crystal.Parent = auraModel
+
+			-- Add point light
+			local light = Instance.new("PointLight")
+			light.Color = auraColors[itemName] or Color3.new(1, 1, 1)
+			light.Brightness = 2
+			light.Range = 15
+			light.Parent = crystal
+
+			-- Add particle emitter for visual effect
+			local attachment = Instance.new("Attachment")
+			attachment.Parent = crystal
+
+			local particles = Instance.new("ParticleEmitter")
+			particles.Color = ColorSequence.new(auraColors[itemName] or Color3.new(1, 1, 1))
+			particles.Size = NumberSequence.new(0.3, 0)
+			particles.Lifetime = NumberRange.new(1, 2)
+			particles.Rate = 5
+			particles.Speed = NumberRange.new(0.5, 1)
+			particles.SpreadAngle = Vector2.new(180, 180)
+			particles.Transparency = NumberSequence.new(0.3, 1)
+			particles.Parent = attachment
+
+			-- Store aura type for later use
+			local auraType = Instance.new("StringValue")
+			auraType.Name = "AuraType"
+			auraType.Value = itemName
+			auraType.Parent = auraModel
+
+			-- Store aura range
+			local rangeValue = Instance.new("NumberValue")
+			rangeValue.Name = "AuraRange"
+			rangeValue.Value = auraRanges[itemName] or 25
+			rangeValue.Parent = auraModel
+
+			auraModel.PrimaryPart = base
+
+			local cost = Instance.new("IntValue")
+			cost.Name = "Cost"
+			cost.Value = auraCosts[itemName] or 150
+			cost.Parent = auraModel
+
+			template = auraModel
+			categoryName = "Auras"
+			print("BuildingManager: Created dynamic", itemName, "template")
 		else
 			warn("BuildingManager: Template not found for", itemName)
 			return
@@ -564,37 +878,69 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 
 	-- Construction progress
 	task.spawn(function()
-		local startTime = tick()
-		local endTime = startTime + buildTime
+		local effectiveElapsed = 0 -- Tracks progress accounting for assist bonus
+		local lastTick = tick()
 
-		while tick() < endTime do
+		while effectiveElapsed < buildTime do
 			-- Check if construction site was destroyed
 			if not constructionSite or not constructionSite.Parent then
 				print("BuildingManager: Construction site destroyed before completion")
+				-- Cleanup assist data
+				constructionAssists[constructionSite] = nil
 				return
 			end
 
+			-- Calculate time delta with assist multiplier
+			local now = tick()
+			local delta = now - lastTick
+			local assistMultiplier = getAssistMultiplier(constructionSite)
+			effectiveElapsed = effectiveElapsed + (delta * assistMultiplier)
+			lastTick = now
+
 			-- Update progress bar
-			local elapsed = tick() - startTime
-			local progress = elapsed / buildTime
+			local progress = math.min(effectiveElapsed / buildTime, 1)
+			local remainingTime = (buildTime - effectiveElapsed) / assistMultiplier
 
 			if progressBar and progressBar.Parent then
 				progressBar.Size = UDim2.new(progress, 0, 1, 0)
+				-- Change color when being assisted
+				if assistMultiplier > 1 then
+					progressBar.BackgroundColor3 = Color3.new(0, 1, 0.5) -- Green-cyan when assisted
+				else
+					progressBar.BackgroundColor3 = Color3.new(1, 0.7, 0) -- Orange normally
+				end
 			end
 			if timeText and timeText.Parent then
-				timeText.Text = string.format("%.1fs", buildTime - elapsed)
+				if assistMultiplier > 1 then
+					timeText.Text = string.format("%.1fs (%.0f%% faster)", math.max(0, remainingTime), (assistMultiplier - 1) * 100)
+				else
+					timeText.Text = string.format("%.1fs", math.max(0, remainingTime))
+				end
 			end
 
+			-- Update model transparency (fade in as construction progresses)
+			updateConstructionTransparency(constructionSite, progress)
+
 			wait(0.1)
+		end
+
+		-- Cleanup assist data
+		constructionAssists[constructionSite] = nil
+
+		-- Remove progress bar billboard first (always clean up)
+		if billboard and billboard.Parent then
+			billboard:Destroy()
 		end
 
 		-- Complete construction
 		if constructionSite and constructionSite.Parent then
 			print("BuildingManager: Construction complete for", itemName)
 
-			local newItem = completeConstruction(constructionSite, template, player.Name, categoryName)
+			local success, newItem = pcall(function()
+				return completeConstruction(constructionSite, template, player.Name, categoryName)
+			end)
 
-			if newItem then
+			if success and newItem then
 				-- Activate turret if applicable
 				if categoryName == "Turrets" then
 					local activateTurretEvent = ReplicatedStorage:FindFirstChild("ActivateTurret")
@@ -604,12 +950,20 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 					end
 				end
 
+				-- Register aura if applicable
+				if itemName:find("Aura") and _G.AuraManager then
+					_G.AuraManager.registerAura(newItem, itemName)
+					print("BuildingManager: Registered aura", itemName, "for", player.Name)
+				end
+
 				-- Notify player
 				if showNotification then
 					showNotification:FireClient(player, itemName .. " construction complete!", Color3.new(0, 1, 0))
 				end
 
 				print("BuildingManager: Successfully completed", itemName, "for", player.Name)
+			elseif not success then
+				warn("BuildingManager: Error completing construction:", newItem)
 			end
 		end
 	end)

@@ -12,9 +12,13 @@ print("HighScoreManager: Starting... (Reserved:", isReservedServer, ")")
 
 -- DataStore setup
 local highScoreStore = DataStoreService:GetDataStore("KodoTagHighScores_v1")
+local globalLeaderboard = DataStoreService:GetOrderedDataStore("KodoTagLeaderboard_v1")
 
 -- Cache of loaded high scores
 local playerHighScores = {}
+local cachedGlobalTop10 = {}
+local lastLeaderboardFetch = 0
+local LEADERBOARD_CACHE_TIME = 30 -- Refresh every 30 seconds
 
 -- Create RemoteEvents
 local getHighScore = Instance.new("RemoteFunction")
@@ -69,6 +73,9 @@ local function saveHighScore(player, newWave, kodoKills)
 		currentData.bestWave = newWave
 		currentData.bestWaveDate = os.time()
 		print("HighScoreManager: NEW RECORD for", player.Name, "- Wave", newWave)
+
+		-- Update global leaderboard
+		updateGlobalLeaderboard(player, newWave)
 	end
 
 	-- Save to DataStore
@@ -86,13 +93,83 @@ local function saveHighScore(player, newWave, kodoKills)
 	return isNewRecord, currentData
 end
 
--- Handle client requesting their high score
-getHighScore.OnServerInvoke = function(player)
-	local data = playerHighScores[player.Name]
-	if not data then
-		data = loadHighScore(player)
+-- Update global leaderboard
+local function updateGlobalLeaderboard(player, wave)
+	local success, err = pcall(function()
+		globalLeaderboard:SetAsync(tostring(player.UserId), wave)
+	end)
+
+	if success then
+		print("HighScoreManager: Updated global leaderboard -", player.Name, "wave", wave)
+	else
+		warn("HighScoreManager: Failed to update leaderboard:", err)
 	end
-	return data
+end
+
+-- Get top 10 from global leaderboard
+local function getGlobalTop10()
+	-- Use cached version if recent
+	if tick() - lastLeaderboardFetch < LEADERBOARD_CACHE_TIME and #cachedGlobalTop10 > 0 then
+		return cachedGlobalTop10
+	end
+
+	local topScores = {}
+
+	local success, pages = pcall(function()
+		return globalLeaderboard:GetSortedAsync(false, 10) -- false = descending (highest first)
+	end)
+
+	if success and pages then
+		local data = pages:GetCurrentPage()
+		for rank, entry in ipairs(data) do
+			-- Get player name from UserId
+			local playerName = "Unknown"
+			local nameSuccess, name = pcall(function()
+				return Players:GetNameFromUserIdAsync(tonumber(entry.key))
+			end)
+			if nameSuccess and name then
+				playerName = name
+			end
+
+			table.insert(topScores, {
+				rank = rank,
+				userId = entry.key,
+				name = playerName,
+				wave = entry.value
+			})
+		end
+
+		cachedGlobalTop10 = topScores
+		lastLeaderboardFetch = tick()
+		print("HighScoreManager: Fetched global top 10")
+	else
+		warn("HighScoreManager: Failed to get leaderboard")
+	end
+
+	return topScores
+end
+
+-- Handle client requesting their high score
+getHighScore.OnServerInvoke = function(player, requestType)
+	if requestType == "global" then
+		return getGlobalTop10()
+	elseif requestType == "both" then
+		local personal = playerHighScores[player.Name]
+		if not personal then
+			personal = loadHighScore(player)
+		end
+		return {
+			personal = personal,
+			global = getGlobalTop10()
+		}
+	else
+		-- Default: personal only
+		local data = playerHighScores[player.Name]
+		if not data then
+			data = loadHighScore(player)
+		end
+		return data
+	end
 end
 
 -- Load high scores when players join
@@ -121,7 +198,8 @@ _G.HighScoreManager = {
 	end,
 	getAllHighScores = function()
 		return playerHighScores
-	end
+	end,
+	getGlobalTop10 = getGlobalTop10
 }
 
 print("HighScoreManager: Loaded!")

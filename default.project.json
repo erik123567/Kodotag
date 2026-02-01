@@ -14,6 +14,10 @@
       "$className": "ReplicatedStorage",
       "$path": "src/ReplicatedStorage"
     },
+    "ReplicatedFirst": {
+      "$className": "ReplicatedFirst",
+      "$path": "src/ReplicatedFirst"
+    },
     "ServerStorage": {
       "$className": "ServerStorage",
       "RojoScripts": { "$path": "src/ServerStorage" }

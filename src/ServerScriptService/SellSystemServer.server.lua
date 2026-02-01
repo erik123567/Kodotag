@@ -40,10 +40,25 @@ if not sellBuildingEvent then
 	sellBuildingEvent.Parent = ReplicatedStorage
 end
 
--- Helper: Calculate sell value
-local function getSellValue(buildingName)
+-- Helper: Calculate sell value (scales with health)
+local function getSellValue(building)
+	local buildingName = building.Name
 	local originalCost = ITEM_COSTS[buildingName] or 0
-	return math.floor(originalCost * SELL_PERCENTAGE)
+	local baseSellValue = originalCost * SELL_PERCENTAGE
+
+	-- Get current and max health
+	local currentHealth = building:FindFirstChild("Health")
+	local maxHealth = building:FindFirstChild("MaxHealth")
+
+	if currentHealth and maxHealth and maxHealth.Value > 0 then
+		-- Scale sell value by health percentage
+		local healthPercent = currentHealth.Value / maxHealth.Value
+		healthPercent = math.clamp(healthPercent, 0, 1)
+		return math.floor(baseSellValue * healthPercent)
+	end
+
+	-- Fallback to full value if no health tracking
+	return math.floor(baseSellValue)
 end
 
 -- Helper: Validate building is close enough
@@ -105,9 +120,18 @@ sellBuildingEvent.OnServerEvent:Connect(function(player, building)
 		return
 	end
 
-	-- Calculate sell value
-	local sellValue = getSellValue(buildingName)
-	print("SellSystemServer:", player.Name, "selling", buildingName, "for", sellValue, "gold")
+	-- Calculate sell value (based on health)
+	local sellValue = getSellValue(building)
+
+	-- Get health info for logging
+	local currentHealth = building:FindFirstChild("Health")
+	local maxHealth = building:FindFirstChild("MaxHealth")
+	local healthInfo = ""
+	if currentHealth and maxHealth then
+		healthInfo = " (" .. currentHealth.Value .. "/" .. maxHealth.Value .. " HP)"
+	end
+
+	print("SellSystemServer:", player.Name, "selling", buildingName .. healthInfo, "for", sellValue, "gold")
 
 	-- Give gold
 	RoundManager.initPlayerStats(player)
@@ -120,10 +144,20 @@ sellBuildingEvent.OnServerEvent:Connect(function(player, building)
 	building:Destroy()
 	print("SellSystemServer: Building destroyed")
 
-	-- Notify player
+	-- Notify player (show if damaged)
 	local showNotification = ReplicatedStorage:FindFirstChild("ShowNotification")
 	if showNotification then
-		showNotification:FireClient(player, "Sold " .. buildingName .. " for " .. sellValue .. " gold!", Color3.new(0, 1, 0))
+		local message = "Sold " .. buildingName .. " for " .. sellValue .. " gold!"
+		local notifColor = Color3.new(0, 1, 0)
+
+		-- Show warning if selling damaged building
+		if currentHealth and maxHealth and currentHealth.Value < maxHealth.Value then
+			local healthPercent = math.floor((currentHealth.Value / maxHealth.Value) * 100)
+			message = "Sold damaged " .. buildingName .. " (" .. healthPercent .. "% HP) for " .. sellValue .. "g"
+			notifColor = Color3.new(1, 0.8, 0)  -- Yellow for damaged
+		end
+
+		showNotification:FireClient(player, message, notifColor)
 	end
 end)
 

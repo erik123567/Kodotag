@@ -22,8 +22,16 @@ local shrineActive = true
 wait(2)
 local RoundManager = _G.RoundManager
 
+-- Wait for map to generate
+print("ResurrectionShrine: Waiting for map to generate...")
+local attempts = 0
+while not _G.MapInfo and attempts < 100 do
+	task.wait(0.1)
+	attempts = attempts + 1
+end
+
 -- Find the shrine in workspace/GameArea
-local gameArea = workspace:FindFirstChild("GameArea")
+local gameArea = workspace:WaitForChild("GameArea", 10)
 local shrine = nil
 
 if gameArea then
@@ -41,7 +49,15 @@ end
 
 print("ResurrectionShrine: Found shrine at", shrine:GetFullName())
 
-local shrinePosition = shrine.Position or shrine:GetPivot().Position
+-- Get shrine position (handle both Model and Part)
+local shrinePosition
+if shrine:IsA("Model") and shrine.PrimaryPart then
+	shrinePosition = shrine.PrimaryPart.Position
+elseif shrine:IsA("BasePart") then
+	shrinePosition = shrine.Position
+else
+	shrinePosition = shrine:GetPivot().Position
+end
 
 -- Get notification event
 local showNotification = ReplicatedStorage:WaitForChild("ShowNotification", 10)

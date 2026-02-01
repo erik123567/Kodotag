@@ -16,30 +16,41 @@ local player = Players.LocalPlayer
 local screenGui = script.Parent
 
 -- Settings
-local MAP_SIZE = 150 -- Pixels
-local MAP_SCALE = 0.5 -- Studs to pixels ratio (adjust based on map size)
+local MAP_SIZE = 150 -- Pixels for minimap
 local UPDATE_RATE = 0.1 -- Seconds between updates
 local MAP_CENTER = Vector3.new(0, 0, 0) -- Center of the game area
+local MAP_SCALE = 0.5 -- Will be recalculated based on actual map size
+local GAME_MAP_SIZE = 200 -- Default, will be updated when Ground is found
 
--- Try to find game area bounds
-local gameArea = workspace:FindFirstChild("GameArea")
-if gameArea then
-	-- Try to calculate center from spawn locations
-	local spawnLocations = gameArea:FindFirstChild("SpawnLocations")
-	if spawnLocations and #spawnLocations:GetChildren() > 0 then
-		local totalPos = Vector3.new(0, 0, 0)
-		local count = 0
-		for _, spawn in ipairs(spawnLocations:GetChildren()) do
-			if spawn:IsA("BasePart") then
-				totalPos = totalPos + spawn.Position
-				count = count + 1
-			end
-		end
-		if count > 0 then
-			MAP_CENTER = totalPos / count
-		end
+-- Function to detect actual map size and calculate scale
+local function updateMapScale()
+	-- Try to find the Ground part created by MapGenerator
+	local ground = workspace:FindFirstChild("Ground")
+	if ground and ground:IsA("BasePart") then
+		GAME_MAP_SIZE = math.max(ground.Size.X, ground.Size.Z)
+		MAP_CENTER = Vector3.new(ground.Position.X, 0, ground.Position.Z)
+		-- Scale so the entire map fits in the minimap
+		MAP_SCALE = MAP_SIZE / GAME_MAP_SIZE
+		print("Minimap: Detected map size:", GAME_MAP_SIZE, "- scale:", MAP_SCALE)
+		return true
 	end
+	return false
 end
+
+-- Wait for map to be generated
+task.spawn(function()
+	local attempts = 0
+	while not updateMapScale() and attempts < 50 do
+		task.wait(0.2)
+		attempts = attempts + 1
+	end
+	if attempts >= 50 then
+		print("Minimap: Using default scale (Ground not found)")
+	end
+end)
+
+-- Initial attempt
+updateMapScale()
 
 -- Colors for different entities
 local COLORS = {
@@ -450,13 +461,15 @@ fullCanvasCorner.Parent = fullMapCanvas
 -- Store full map dots separately
 local fullMapDots = {}
 
--- Full map scale (larger view = smaller scale value to fit more area)
-local FULL_MAP_SCALE = 1.5
+-- Full map scale (calculated dynamically based on game map size)
+local FULL_MAP_SCALE = FULL_MAP_SIZE / GAME_MAP_SIZE
 
 -- Convert world position to full map position
 local function worldToFullMap(worldPos)
-	local relativeX = (worldPos.X - MAP_CENTER.X) * FULL_MAP_SCALE
-	local relativeZ = (worldPos.Z - MAP_CENTER.Z) * FULL_MAP_SCALE
+	-- Recalculate scale in case map size was updated
+	local scale = FULL_MAP_SIZE / GAME_MAP_SIZE
+	local relativeX = (worldPos.X - MAP_CENTER.X) * scale
+	local relativeZ = (worldPos.Z - MAP_CENTER.Z) * scale
 
 	local mapX = FULL_MAP_SIZE / 2 + relativeX
 	local mapY = FULL_MAP_SIZE / 2 + relativeZ

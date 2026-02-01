@@ -12,8 +12,9 @@ KodoAI.KODO_TYPES = {
 		name = "Kodo",
 		color = Color3.fromRGB(139, 90, 43), -- Brown
 		resistances = {},
-		speedMult = 1.0,
-		healthMult = 1.0
+		speedMult = 1.0,       -- Same speed as player (16)
+		healthMult = 1.0,
+		damageMult = 1.0       -- Normal structure damage
 	},
 	Armored = {
 		name = "Armored Kodo",
@@ -23,8 +24,9 @@ KodoAI.KODO_TYPES = {
 			poison = 1.5,      -- 50% extra poison damage
 			aoe = 1.5          -- 50% extra AOE damage
 		},
-		speedMult = 0.85,
-		healthMult = 1.3
+		speedMult = 0.7,       -- Slower (11 speed)
+		healthMult = 1.5,      -- Tankier
+		damageMult = 1.5       -- Hits structures harder
 	},
 	Swift = {
 		name = "Swift Kodo",
@@ -33,8 +35,22 @@ KodoAI.KODO_TYPES = {
 			poison = 0.7,      -- 30% poison resistance (fast metabolism)
 			frost = 1.5        -- 50% more effective slows
 		},
-		speedMult = 1.4,
-		healthMult = 0.7
+		speedMult = 1.5,       -- Fast (24 speed)
+		healthMult = 0.6,      -- Fragile
+		damageMult = 0.7       -- Weak attacks
+	},
+	Brute = {
+		name = "Brute Kodo",
+		color = Color3.fromRGB(80, 50, 30), -- Dark brown
+		resistances = {
+			physical = 0.6,    -- 40% physical resistance
+			frost = 0.8,       -- Slight frost resistance
+			poison = 1.3       -- Weak to poison
+		},
+		speedMult = 0.5,       -- Very slow (8 speed)
+		healthMult = 2.0,      -- Very tanky
+		damageMult = 3.0,      -- Devastating structure damage
+		sizeMult = 1.3         -- Bigger
 	},
 	Frostborn = {
 		name = "Frostborn Kodo",
@@ -43,8 +59,9 @@ KodoAI.KODO_TYPES = {
 			frost = 0,         -- Immune to frost
 			physical = 1.3     -- 30% extra physical damage
 		},
-		speedMult = 0.95,
-		healthMult = 1.1
+		speedMult = 0.9,       -- Slightly slow
+		healthMult = 1.1,
+		damageMult = 1.0
 	},
 	Venomous = {
 		name = "Venomous Kodo",
@@ -53,8 +70,9 @@ KodoAI.KODO_TYPES = {
 			poison = 0,        -- Immune to poison
 			frost = 1.3        -- 30% extra frost damage
 		},
-		speedMult = 1.0,
-		healthMult = 1.0
+		speedMult = 1.1,       -- Slightly fast
+		healthMult = 0.9,
+		damageMult = 1.0
 	},
 	Horde = {
 		name = "Horde Kodo",
@@ -64,8 +82,9 @@ KodoAI.KODO_TYPES = {
 			aoe = 2.0,         -- Double AOE damage
 			multishot = 2.0    -- Double multishot damage
 		},
-		speedMult = 1.2,
-		healthMult = 0.5,
+		speedMult = 1.3,       -- Fast
+		healthMult = 0.4,      -- Very fragile
+		damageMult = 0.5,      -- Weak attacks
 		sizeMult = 0.7         -- Smaller
 	},
 	Mini = {
@@ -76,8 +95,9 @@ KodoAI.KODO_TYPES = {
 			multishot = 1.5,   -- 50% extra multishot damage
 			physical = 0.8     -- Slight physical resistance (small target)
 		},
-		speedMult = 1.5,       -- Very fast
-		healthMult = 0.3,      -- Very fragile
+		speedMult = 1.6,       -- Very fast (26 speed)
+		healthMult = 0.25,     -- Very fragile
+		damageMult = 0.3,      -- Tiny attacks
 		sizeMult = 0.4,        -- Tiny - same size as player
 		agentRadius = 1.0,     -- Can fit through player-sized gaps!
 		canFitThroughGaps = true
@@ -89,10 +109,12 @@ local CHASE_RANGE = 300
 local BASE_MOVE_SPEED = 16
 local WANDER_DISTANCE = 50
 local STRUCTURE_ATTACK_DAMAGE = 25
-local STRUCTURE_ATTACK_COOLDOWN = 1
+local STRUCTURE_ATTACK_COOLDOWN = 0.6  -- Faster attacks when stuck
 local PLAYER_KILL_RANGE = 5
 local RAYCAST_DISTANCE = 15
-local PATH_CACHE_TIME = 3
+local PATH_CACHE_TIME = 2  -- Recalculate paths more often
+local STUCK_TIME_THRESHOLD = 0.8  -- Faster stuck detection
+local SPREAD_RADIUS = 8  -- Kodos spread out this much when targeting
 
 -- Maze mechanics settings
 -- Kodos are larger than players - they can't fit through small gaps
@@ -266,11 +288,17 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth
 		print("KodoAI: Connected Died event for", kodo.Name)
 	end
 
-	-- Store custom damage for attackStructure
+	-- Store custom damage for attackStructure (apply type damage multiplier)
+	local baseDamage = customDamage or STRUCTURE_ATTACK_DAMAGE
+	local damageMult = typeConfig.damageMult or 1.0
+	local finalDamage = math.floor(baseDamage * damageMult)
+
 	local damageValue = Instance.new("NumberValue")
 	damageValue.Name = "StructureDamage"
-	damageValue.Value = customDamage or STRUCTURE_ATTACK_DAMAGE
+	damageValue.Value = finalDamage
 	damageValue.Parent = kodo
+
+	print("KodoAI: Spawned", typeConfig.name, "- Speed:", finalSpeed, "HP:", finalHealth, "Dmg:", finalDamage)
 
 	-- Apply type visuals (color and size)
 	local sizeMult = typeConfig.sizeMult or 1.0
@@ -326,32 +354,137 @@ function KodoAI.handleDeath(kodo)
 	local rootPart = kodo:FindFirstChild("HumanoidRootPart")
 	if not rootPart then return end
 
+	-- Get kodo color for particles
+	local kodoColor = Color3.fromRGB(139, 90, 43) -- Default brown
+	local typeValue = kodo:FindFirstChild("KodoType")
+	if typeValue then
+		local typeConfig = KodoAI.KODO_TYPES[typeValue.Value]
+		if typeConfig then
+			kodoColor = typeConfig.color
+		end
+	end
+
 	local showNotification = ReplicatedStorage:FindFirstChild("ShowNotification")
 	if showNotification then
 		showNotification:FireAllClients("Kodo eliminated!", Color3.new(0, 1, 0))
 	end
 
-	local explosion = Instance.new("Explosion")
-	explosion.Position = rootPart.Position
-	explosion.BlastRadius = 8
-	explosion.BlastPressure = 0
-	explosion.Parent = workspace
+	-- Disable humanoid to stop AI
+	local humanoid = kodo:FindFirstChild("Humanoid")
+	if humanoid then
+		humanoid.PlatformStand = true
+	end
 
+	-- Apply ragdoll physics
 	for _, part in ipairs(kodo:GetDescendants()) do
 		if part:IsA("BasePart") then
-			part.CanCollide = false
+			part.CanCollide = true
+			part.Anchored = false
+
+			-- Add random velocity for ragdoll effect
+			local randomVelocity = Vector3.new(
+				math.random(-15, 15),
+				math.random(10, 25),
+				math.random(-15, 15)
+			)
+			part.AssemblyLinearVelocity = randomVelocity
+			part.AssemblyAngularVelocity = Vector3.new(
+				math.random(-5, 5),
+				math.random(-5, 5),
+				math.random(-5, 5)
+			)
+		end
+
+		-- Break motor6D joints for ragdoll
+		if part:IsA("Motor6D") then
+			part:Destroy()
 		end
 	end
 
+	-- Create death particles at center
+	local deathAttachment = Instance.new("Attachment")
+	deathAttachment.Parent = rootPart
+
+	-- Dissolve particles
+	local dissolveParticles = Instance.new("ParticleEmitter")
+	dissolveParticles.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, kodoColor),
+		ColorSequenceKeypoint.new(0.5, Color3.new(0.3, 0.3, 0.3)),
+		ColorSequenceKeypoint.new(1, Color3.new(0.1, 0.1, 0.1))
+	})
+	dissolveParticles.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.5),
+		NumberSequenceKeypoint.new(0.3, 1),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	dissolveParticles.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.7, 0.5),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	dissolveParticles.Lifetime = NumberRange.new(0.8, 1.5)
+	dissolveParticles.Rate = 50
+	dissolveParticles.Speed = NumberRange.new(3, 8)
+	dissolveParticles.SpreadAngle = Vector2.new(180, 180)
+	dissolveParticles.RotSpeed = NumberRange.new(-180, 180)
+	dissolveParticles.Parent = deathAttachment
+
+	-- Soul/essence effect rising up
+	local soulParticles = Instance.new("ParticleEmitter")
+	soulParticles.Color = ColorSequence.new(Color3.new(0.8, 1, 0.8))
+	soulParticles.LightEmission = 0.8
+	soulParticles.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(0.5, 0.5),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	soulParticles.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	soulParticles.Lifetime = NumberRange.new(1, 2)
+	soulParticles.Rate = 20
+	soulParticles.Speed = NumberRange.new(5, 10)
+	soulParticles.SpreadAngle = Vector2.new(30, 30)
+	soulParticles.EmissionDirection = Enum.NormalId.Top
+	soulParticles.Parent = deathAttachment
+
+	-- Initial burst
+	dissolveParticles:Emit(30)
+
+	-- Small visual explosion (no damage)
+	local explosion = Instance.new("Explosion")
+	explosion.Position = rootPart.Position
+	explosion.BlastRadius = 0
+	explosion.BlastPressure = 0
+	explosion.Parent = workspace
+
+	-- Fade out and destroy
 	task.spawn(function()
-		for i = 0, 1, 0.1 do
+		-- Let ragdoll fall for a moment
+		wait(0.3)
+
+		-- Stop emitting new particles
+		dissolveParticles.Rate = 0
+		soulParticles.Rate = 0
+
+		-- Gradually fade out parts
+		for i = 0, 1, 0.05 do
 			for _, part in ipairs(kodo:GetDescendants()) do
 				if part:IsA("BasePart") then
 					part.Transparency = i
 				end
 			end
-			wait(0.05)
+
+			-- Emit dissolve particles as we fade
+			if i < 0.5 then
+				dissolveParticles:Emit(5)
+			end
+
+			wait(0.04)
 		end
+
+		-- Final cleanup
 		wait(0.5)
 		kodo:Destroy()
 	end)
@@ -389,20 +522,22 @@ local function isPathClear(startPos, targetPos, ignoreList)
 	return true, nil
 end
 
--- Find blocking structure
+-- Find blocking structure (prioritize walls/barricades over turrets)
 local function findBlockingStructure(position)
 	local nearestStructure = nil
-	local nearestDistance = 10
+	local nearestDistance = 15  -- Increased search range
 
-	local structureNames = {
-		Barricade = true, Wall = true,
+	-- Priority: walls/barricades first, then other structures
+	local wallNames = { Barricade = true, Wall = true }
+	local otherNames = {
 		Turret = true, FastTurret = true, SlowTurret = true,
 		FrostTurret = true, PoisonTurret = true, MultiShotTurret = true, CannonTurret = true,
 		Farm = true, Workshop = true
 	}
 
+	-- First pass: find walls/barricades (these are what mazes are made of)
 	for _, obj in ipairs(workspace:GetChildren()) do
-		if structureNames[obj.Name] then
+		if wallNames[obj.Name] then
 			local objPos = nil
 			if obj:IsA("Model") and obj.PrimaryPart then
 				objPos = obj.PrimaryPart.Position
@@ -415,6 +550,29 @@ local function findBlockingStructure(position)
 				if distance < nearestDistance then
 					nearestDistance = distance
 					nearestStructure = obj
+				end
+			end
+		end
+	end
+
+	-- If no wall found, check other structures
+	if not nearestStructure then
+		nearestDistance = 15
+		for _, obj in ipairs(workspace:GetChildren()) do
+			if otherNames[obj.Name] then
+				local objPos = nil
+				if obj:IsA("Model") and obj.PrimaryPart then
+					objPos = obj.PrimaryPart.Position
+				elseif obj:IsA("BasePart") then
+					objPos = obj.Position
+				end
+
+				if objPos then
+					local distance = (objPos - position).Magnitude
+					if distance < nearestDistance then
+						nearestDistance = distance
+						nearestStructure = obj
+					end
 				end
 			end
 		end
@@ -477,12 +635,51 @@ function KodoAI.runAI(kodo)
 	local lastMoveTime = tick()
 	local lastAttackTime = 0
 
+	-- Facing direction using BodyGyro (doesn't fight physics)
+	local bodyGyro = Instance.new("BodyGyro")
+	bodyGyro.MaxTorque = Vector3.new(0, 10000, 0)  -- Only rotate on Y axis
+	bodyGyro.P = 5000
+	bodyGyro.D = 500
+	bodyGyro.Parent = rootPart
+
+	local lastAnimPos = rootPart.Position
+
+	-- Facing animation loop (no bobbing - let physics handle movement)
+	task.spawn(function()
+		while kodo and kodo.Parent and humanoid.Health > 0 do
+			local currentPos = rootPart.Position
+			local movement = (currentPos - lastAnimPos)
+			local moveDir = Vector3.new(movement.X, 0, movement.Z)
+
+			if moveDir.Magnitude > 0.3 then
+				-- Face movement direction using BodyGyro (smooth, doesn't conflict)
+				local targetCFrame = CFrame.new(rootPart.Position, rootPart.Position + moveDir)
+				bodyGyro.CFrame = targetCFrame
+			end
+
+			lastAnimPos = currentPos
+			task.wait(0.1)
+		end
+
+		-- Cleanup
+		if bodyGyro and bodyGyro.Parent then
+			bodyGyro:Destroy()
+		end
+	end)
+
 	-- Maze navigation: Kodos try to find paths before attacking walls
 	-- Mini Kodos don't need to attack walls - they can fit through gaps!
 	local pathfindAttempts = 0       -- How many times pathfinding failed
-	local MAX_PATH_ATTEMPTS = canFitThroughGaps and 10 or 3  -- Mini Kodos try harder to find paths
+	local MAX_PATH_ATTEMPTS = canFitThroughGaps and 8 or 2  -- Fewer attempts before attacking
 	local frustrationLevel = 0       -- Increases when stuck, decreases when moving
-	local FRUSTRATION_THRESHOLD = canFitThroughGaps and 15 or 5  -- Mini Kodos rarely attack walls
+	local FRUSTRATION_THRESHOLD = canFitThroughGaps and 10 or 3  -- Lower threshold = attack sooner
+
+	-- Spreading: Each kodo gets a random offset so they don't all target the same spot
+	local spreadOffset = Vector3.new(
+		(math.random() - 0.5) * SPREAD_RADIUS * 2,
+		0,
+		(math.random() - 0.5) * SPREAD_RADIUS * 2
+	)
 
 	-- Movement reached connection
 	local moveConnection = humanoid.MoveToFinished:Connect(function(reached)
@@ -510,6 +707,12 @@ function KodoAI.runAI(kodo)
 
 			for _, player in ipairs(Players:GetPlayers()) do
 				if player.Character then
+					-- Skip cloaked/ghosted players
+					local cloaked = player.Character:FindFirstChild("Cloaked")
+					if cloaked and cloaked.Value == true then
+						continue
+					end
+
 					local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
 					local playerHumanoid = player.Character:FindFirstChild("Humanoid")
 
@@ -525,17 +728,17 @@ function KodoAI.runAI(kodo)
 
 			-- Check if stuck (for maze navigation)
 			local distanceMoved = (rootPart.Position - lastPosition).Magnitude
-			local isStuck = distanceMoved < 1 and tick() - lastMoveTime > 1.5
+			local isStuck = distanceMoved < 0.5 and tick() - lastMoveTime > STUCK_TIME_THRESHOLD
 
-			if distanceMoved > 1 then
+			if distanceMoved > 0.5 then
 				lastMoveTime = tick()
-				-- Moving well - reduce frustration
-				frustrationLevel = math.max(0, frustrationLevel - 1)
+				-- Moving well - reduce frustration slowly
+				frustrationLevel = math.max(0, frustrationLevel - 0.5)
 				pathfindAttempts = 0
 			else
-				-- Not moving - increase frustration
-				if tick() - lastMoveTime > 1 then
-					frustrationLevel = frustrationLevel + 1
+				-- Not moving - increase frustration faster
+				if tick() - lastMoveTime > 0.3 then
+					frustrationLevel = frustrationLevel + 2  -- Build frustration faster
 				end
 			end
 			lastPosition = rootPart.Position
@@ -544,10 +747,11 @@ function KodoAI.runAI(kodo)
 				local targetRoot = nearestPlayer.Character:FindFirstChild("HumanoidRootPart")
 
 				if targetRoot then
-					local targetPos = targetRoot.Position
+					-- Apply spread offset so kodos don't all clump on exact same spot
+					local targetPos = targetRoot.Position + spreadOffset
 
-					-- Maze behavior: Only attack walls when truly frustrated
-					-- This gives Kodos time to find alternate paths
+					-- Maze behavior: Only attack walls when frustrated
+					-- Lower threshold means they attack sooner
 					if isStuck and frustrationLevel >= FRUSTRATION_THRESHOLD then
 						local nearestStructure = findBlockingStructure(rootPart.Position)
 						if nearestStructure then
@@ -607,21 +811,24 @@ function KodoAI.runAI(kodo)
 										humanoid:MoveTo(waypoints[1].Position)
 									end
 								else
-									-- No path found - increase frustration
+									-- No path found - increase frustration significantly
 									pathfindAttempts = pathfindAttempts + 1
-									frustrationLevel = frustrationLevel + 1
+									frustrationLevel = frustrationLevel + 3  -- Big frustration boost on path failure
 
-									-- Only attack if we've tried enough times
-									if pathfindAttempts >= MAX_PATH_ATTEMPTS then
+									-- Attack if we've tried enough times OR frustration is high
+									if pathfindAttempts >= MAX_PATH_ATTEMPTS or frustrationLevel >= FRUSTRATION_THRESHOLD then
 										local nearestStructure = findBlockingStructure(rootPart.Position)
 										if nearestStructure then
 											if tick() - lastAttackTime >= STRUCTURE_ATTACK_COOLDOWN then
 												attackStructure(kodo, nearestStructure)
 												lastAttackTime = tick()
+												-- Keep attacking until path clears
+												frustrationLevel = FRUSTRATION_THRESHOLD
 											end
 										else
-											-- No structure blocking - just move toward target
+											-- No structure blocking - move toward target
 											humanoid:MoveTo(targetPos)
+											frustrationLevel = 0
 										end
 									else
 										-- Try moving toward target anyway (might find a gap)
@@ -645,7 +852,7 @@ function KodoAI.runAI(kodo)
 				humanoid:MoveTo(wanderTarget)
 			end
 
-			wait(0.3)
+			wait(0.2)  -- Faster AI updates
 		end
 
 		if moveConnection then
@@ -658,6 +865,12 @@ function KodoAI.runAI(kodo)
 		while kodo and kodo.Parent and humanoid.Health > 0 do
 			for _, player in ipairs(Players:GetPlayers()) do
 				if player.Character then
+					-- Skip cloaked/ghosted players
+					local cloaked = player.Character:FindFirstChild("Cloaked")
+					if cloaked and cloaked.Value == true then
+						continue
+					end
+
 					local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
 					local playerHumanoid = player.Character:FindFirstChild("Humanoid")
 
@@ -679,6 +892,12 @@ function KodoAI.runAI(kodo)
 			part.Touched:Connect(function(hit)
 				local character = hit.Parent
 				if character then
+					-- Skip cloaked/ghosted players
+					local cloaked = character:FindFirstChild("Cloaked")
+					if cloaked and cloaked.Value == true then
+						return
+					end
+
 					local hitHumanoid = character:FindFirstChild("Humanoid")
 					if hitHumanoid and Players:GetPlayerFromCharacter(character) then
 						hitHumanoid.Health = 0

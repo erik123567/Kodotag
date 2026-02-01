@@ -22,22 +22,22 @@ local MINE_RESOURCE = 300  -- Total gold in each mine
 local MINE_RESPAWN_TIME = 45  -- Seconds before depleted mine respawns
 local MINING_RANGE = 12  -- How close player must be to mine
 local MINE_HEIGHT = 3  -- Height above ground
+local MINE_DISTANCE_PERCENT = 0.75  -- Mines spawn at 75% of half-map-size from center (near edges)
 
 -- Settings for Random Bonus Veins
 local VEIN_MIN_GOLD = 30
 local VEIN_MAX_GOLD = 50
 local VEIN_SPAWN_INTERVAL = 35  -- Seconds between vein spawns
 local VEIN_LIFESPAN = 18  -- Seconds before vein despawns
-local VEIN_SPAWN_RADIUS = 60  -- How far from center veins can spawn
+local VEIN_SPAWN_PERCENT = 0.4  -- Veins spawn within 40% of half-map-size
 local VEIN_MIN_DISTANCE_FROM_SPAWNS = 25  -- Minimum distance from player spawns
 
--- Fixed mine positions (strategic locations around the map)
--- These create a diamond pattern around the center, encouraging map control
-local MINE_POSITIONS = {
-	{name = "North Mine", offset = Vector3.new(0, 0, -70)},
-	{name = "South Mine", offset = Vector3.new(0, 0, 70)},
-	{name = "East Mine", offset = Vector3.new(70, 0, 0)},
-	{name = "West Mine", offset = Vector3.new(-70, 0, 0)},
+-- Mine directions (will be scaled by map size)
+local MINE_DIRECTIONS = {
+	{name = "North Mine", direction = Vector3.new(0, 0, -1)},
+	{name = "South Mine", direction = Vector3.new(0, 0, 1)},
+	{name = "East Mine", direction = Vector3.new(1, 0, 0)},
+	{name = "West Mine", direction = Vector3.new(-1, 0, 0)},
 }
 
 -- Wait for RoundManager
@@ -47,50 +47,33 @@ local RoundManager = _G.RoundManager
 -- Active mines
 local activeMines = {}
 
--- Calculate map center from spawn locations or Baseplate
+-- Get map info from MapGenerator
+local function getMapInfo()
+	-- Wait for MapInfo to be set by MapGenerator
+	local attempts = 0
+	while not _G.MapInfo and attempts < 50 do
+		task.wait(0.2)
+		attempts = attempts + 1
+	end
+
+	if _G.MapInfo then
+		print("GoldMineManager: Using MapInfo - size:", _G.MapInfo.size, "center:", _G.MapInfo.center)
+		return _G.MapInfo
+	end
+
+	-- Fallback if MapGenerator didn't run
+	print("GoldMineManager: MapInfo not found, using defaults")
+	return {
+		size = 200,
+		center = Vector3.new(0, 0, 0),
+		halfSize = 100
+	}
+end
+
+-- Calculate map center (for compatibility)
 local function getMapCenter()
-	local center = Vector3.new(0, 0, 0)
-
-	-- Try GameArea spawn locations first
-	local gameArea = workspace:FindFirstChild("GameArea")
-	if gameArea then
-		local spawnLocations = gameArea:FindFirstChild("SpawnLocations")
-		if spawnLocations and #spawnLocations:GetChildren() > 0 then
-			local totalPos = Vector3.new(0, 0, 0)
-			local count = 0
-			for _, spawn in ipairs(spawnLocations:GetChildren()) do
-				if spawn:IsA("BasePart") then
-					totalPos = totalPos + spawn.Position
-					count = count + 1
-				end
-			end
-			if count > 0 then
-				center = totalPos / count
-				print("GoldMineManager: Using SpawnLocations center:", center)
-				return center
-			end
-		end
-	end
-
-	-- Fallback: use Baseplate center
-	local baseplate = workspace:FindFirstChild("Baseplate")
-	if baseplate and baseplate:IsA("BasePart") then
-		center = baseplate.Position
-		print("GoldMineManager: Using Baseplate center:", center)
-		return center
-	end
-
-	-- Fallback: use any SpawnLocation in workspace
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("SpawnLocation") then
-			center = obj.Position
-			print("GoldMineManager: Using SpawnLocation center:", center)
-			return center
-		end
-	end
-
-	print("GoldMineManager: Using default center (0,0,0)")
-	return center
+	local mapInfo = getMapInfo()
+	return mapInfo.center
 end
 
 -- Create RemoteEvents
@@ -125,10 +108,10 @@ local function findGroundPosition(x, z)
 		return Vector3.new(x, groundY, z)
 	end
 
-	-- Fallback: try to find Baseplate height
-	local baseplate = workspace:FindFirstChild("Baseplate")
-	if baseplate and baseplate:IsA("BasePart") then
-		local groundY = baseplate.Position.Y + (baseplate.Size.Y / 2) + MINE_HEIGHT
+	-- Fallback: try to find Ground part (created by MapGenerator)
+	local ground = workspace:FindFirstChild("Ground")
+	if ground and ground:IsA("BasePart") then
+		local groundY = ground.Position.Y + (ground.Size.Y / 2) + MINE_HEIGHT
 		return Vector3.new(x, groundY, z)
 	end
 
@@ -153,6 +136,7 @@ local function createMineModel(position, mineName)
 	orePart.Size = Vector3.new(8, 5, 8)
 	orePart.Position = position
 	orePart.Anchored = true
+	orePart.CanCollide = false -- Don't block Kodos
 	orePart.Material = Enum.Material.Rock
 	orePart.BrickColor = BrickColor.new("Bright yellow")
 	orePart.Parent = mine
@@ -459,10 +443,18 @@ end)
 
 -- Initial spawn of all fixed mines
 local function initializeMines()
-	local mapCenter = getMapCenter()
-	print("GoldMineManager: Map center at", mapCenter)
+	local mapInfo = getMapInfo()
+	local mapCenter = mapInfo.center
+	local mineDistance = mapInfo.halfSize * MINE_DISTANCE_PERCENT
 
-	for _, mineData in ipairs(MINE_POSITIONS) do
+	print("GoldMineManager: Map center at", mapCenter, "- mine distance:", mineDistance)
+
+	-- Generate mine positions based on map size
+	for _, mineDir in ipairs(MINE_DIRECTIONS) do
+		local mineData = {
+			name = mineDir.name,
+			offset = mineDir.direction * mineDistance
+		}
 		spawnMine(mineData, mapCenter)
 	end
 end
@@ -501,11 +493,13 @@ end
 
 -- Find valid random position for vein
 local function findVeinSpawnPosition(mapCenter)
+	local mapInfo = getMapInfo()
+	local maxVeinDistance = mapInfo.halfSize * VEIN_SPAWN_PERCENT
 	local spawnLocations = getSpawnLocations()
 
 	for attempt = 1, 20 do
 		local angle = math.random() * math.pi * 2
-		local distance = math.random(20, VEIN_SPAWN_RADIUS)
+		local distance = math.random(20, math.floor(maxVeinDistance))
 		local x = mapCenter.X + math.cos(angle) * distance
 		local z = mapCenter.Z + math.sin(angle) * distance
 
@@ -545,6 +539,7 @@ local function createVeinModel(position, goldAmount)
 	orePart.Size = Vector3.new(4, 3, 4)
 	orePart.Position = position
 	orePart.Anchored = true
+	orePart.CanCollide = false -- Don't block Kodos
 	orePart.Material = Enum.Material.Rock
 	orePart.BrickColor = BrickColor.new("Bright yellow")
 	orePart.Parent = vein

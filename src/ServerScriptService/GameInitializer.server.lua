@@ -27,6 +27,17 @@ isGameServer.Value = isReservedServer
 isGameServer.Parent = ReplicatedStorage
 print("IsGameServer flag set to: " .. tostring(isReservedServer))
 
+-- Create GameReady event (fires when players arrive, before intermission)
+local gameReady = Instance.new("RemoteEvent")
+gameReady.Name = "GameReady"
+gameReady.Parent = ReplicatedStorage
+
+-- Create a flag clients can check if they miss the event
+local gameReadyFlag = Instance.new("BoolValue")
+gameReadyFlag.Name = "GameReadyFlag"
+gameReadyFlag.Value = false
+gameReadyFlag.Parent = ReplicatedStorage
+
 if isReservedServer then
 	-- This is a GAME server (reserved)
 	print("GAME SERVER - This is where the actual Kodo Tag game runs")
@@ -61,7 +72,41 @@ if isReservedServer then
 		if #arrivedPlayers >= _G.GameConfig.expectedPlayers and not gameStarted then
 			gameStarted = true
 			_G.GameConfig.playersReady = true
-			print("All players arrived! Signaling RoundManager to start...")
+			print("All players arrived! Waiting for map and characters to load...")
+
+			-- Wait for everything to be ready in a separate thread
+			task.spawn(function()
+				-- Wait for map to be generated
+				local mapWaitStart = tick()
+				while not _G.MapInfo and tick() - mapWaitStart < 15 do
+					task.wait(0.2)
+				end
+				if _G.MapInfo then
+					print("GameInitializer: Map is ready")
+				else
+					print("GameInitializer: Map wait timeout, continuing anyway")
+				end
+
+				-- Wait for all players to have characters
+				for _, p in ipairs(arrivedPlayers) do
+					local charWaitStart = tick()
+					while not p.Character and tick() - charWaitStart < 10 do
+						task.wait(0.2)
+					end
+					if p.Character then
+						print("GameInitializer: " .. p.Name .. " character loaded")
+					end
+				end
+
+				-- Extra delay to ensure everything renders
+				task.wait(5)
+
+				print("GameInitializer: Everything ready, showing game!")
+				-- Set flag so late-loading clients know game is ready
+				gameReadyFlag.Value = true
+				-- Fire GameReady to hide loading screens
+				gameReady:FireAllClients()
+			end)
 		end
 	end)
 
@@ -72,6 +117,9 @@ if isReservedServer then
 			gameStarted = true
 			_G.GameConfig.playersReady = true
 			print("Timeout reached with " .. #arrivedPlayers .. " players. Starting game...")
+			-- Set flag and fire GameReady to hide loading screens
+			gameReadyFlag.Value = true
+			gameReady:FireAllClients()
 		end
 	end)
 

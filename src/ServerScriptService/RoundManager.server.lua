@@ -26,22 +26,23 @@ Players.CharacterAutoLoads = false
 local KodoAI = require(script.Parent.KodoAI)
 
 -- Settings
-local INTERMISSION_TIME = 10
+local INTERMISSION_TIME = 5
+local BUILD_PHASE_TIME = 20 -- Time for players to build before kodos spawn
 local WAVE_INTERVAL = 30
 local GOLD_PER_KODO_KILL = 10  -- Gold reward for killing Kodos
 
 -- Base Difficulty (scales with wave and player count)
-local BASE_KODOS = 2
-local BASE_KODO_SPEED = 14
-local BASE_KODO_HEALTH = 80
-local BASE_KODO_DAMAGE = 20
+local BASE_KODOS = 1
+local BASE_KODO_SPEED = 12
+local BASE_KODO_HEALTH = 150
+local BASE_KODO_DAMAGE = 15
 
--- Scaling multipliers (exponential growth)
-local KODO_COUNT_GROWTH = 1.15      -- 15% more kodos per wave
-local KODO_HEALTH_GROWTH = 1.12     -- 12% more health per wave
-local KODO_DAMAGE_GROWTH = 1.08     -- 8% more damage per wave
-local KODO_SPEED_GROWTH = 1.02      -- 2% faster per wave (capped)
-local MAX_KODO_SPEED = 28           -- Speed cap
+-- Scaling multipliers (exponential growth - ramps up fast!)
+local KODO_COUNT_GROWTH = 1.30      -- 30% more kodos per wave
+local KODO_HEALTH_GROWTH = 1.25     -- 25% more health per wave
+local KODO_DAMAGE_GROWTH = 1.15     -- 15% more damage per wave
+local KODO_SPEED_GROWTH = 1.05      -- 5% faster per wave (capped)
+local MAX_KODO_SPEED = 32           -- Speed cap
 
 -- Player count scaling
 local KODOS_PER_PLAYER = 1          -- Extra kodos per player beyond first
@@ -84,7 +85,7 @@ local MINI_HEALTH_MULTIPLIER = 0.3  -- Very fragile
 local MINI_SPEED_MULTIPLIER = 1.3   -- Fast
 
 -- Kodo Types - spawn chances increase with wave number
-local KODO_TYPES = {"Normal", "Armored", "Swift", "Frostborn", "Venomous", "Horde", "Mini"}
+local KODO_TYPES = {"Normal", "Armored", "Swift", "Brute", "Frostborn", "Venomous", "Horde", "Mini"}
 local function getKodoTypeForWave(wave, isSwarmWave, isMiniWave)
 	-- Swarm waves always spawn Horde kodos
 	if isSwarmWave then
@@ -104,8 +105,9 @@ local function getKodoTypeForWave(wave, isSwarmWave, isMiniWave)
 	-- Calculate spawn weights based on wave
 	local weights = {
 		Normal = math.max(50 - wave * 3, 10),     -- Decreases over time
-		Armored = math.min(wave * 2, 20),          -- Increases slowly
-		Swift = math.min(wave * 2, 20),            -- Increases slowly
+		Armored = math.min(wave * 2, 18),          -- Slow, tanky
+		Swift = math.min(wave * 3, 25),            -- Fast, common threat
+		Brute = math.min((wave - 8) * 2, 12),      -- Appears after wave 8, rare but deadly
 		Frostborn = math.min((wave - 5) * 2, 15),  -- Appears after wave 5
 		Venomous = math.min((wave - 5) * 2, 15),   -- Appears after wave 5
 		Horde = math.min((wave - 7) * 3, 20),      -- Appears after wave 7
@@ -136,18 +138,48 @@ local function getKodoTypeForWave(wave, isSwarmWave, isMiniWave)
 	return "Normal"
 end
 
--- References
-local gameArea = workspace:FindFirstChild("GameArea")
-if not gameArea then
-	warn("GameArea folder not found in Workspace!")
-end
-
-local spawnLocations = gameArea and gameArea:FindFirstChild("SpawnLocations")
-local kodoSpawns = gameArea and gameArea:FindFirstChild("KodoSpawns")
+-- References (will be set after map generates)
+local gameArea = nil
+local spawnLocations = nil
+local kodoSpawns = nil
 local kodoTemplate = game.ServerStorage:FindFirstChild("KodoStorage") and game.ServerStorage.KodoStorage:FindFirstChild("Kodo")
 
-if not spawnLocations or not kodoSpawns or not kodoTemplate then
-	warn("Missing game components! Check SpawnLocations, KodoSpawns, and Kodo template")
+-- Function to acquire map references (called after MapGenerator runs)
+local function acquireMapReferences()
+	-- Wait for MapInfo to be set by MapGenerator
+	print("RoundManager: Waiting for map to generate...")
+	local attempts = 0
+	while not _G.MapInfo and attempts < 100 do
+		task.wait(0.1)
+		attempts = attempts + 1
+	end
+
+	if _G.MapInfo then
+		print("RoundManager: Map generated, acquiring references...")
+	end
+
+	-- Get GameArea
+	gameArea = workspace:FindFirstChild("GameArea")
+	if not gameArea then
+		-- Wait a bit more for it to be created
+		gameArea = workspace:WaitForChild("GameArea", 10)
+	end
+
+	if gameArea then
+		spawnLocations = gameArea:FindFirstChild("SpawnLocations")
+		kodoSpawns = gameArea:FindFirstChild("KodoSpawns")
+		print("RoundManager: Found GameArea with",
+			spawnLocations and #spawnLocations:GetChildren() or 0, "spawn locations,",
+			kodoSpawns and #kodoSpawns:GetChildren() or 0, "kodo spawns")
+	else
+		warn("RoundManager: GameArea not found!")
+	end
+
+	if not kodoTemplate then
+		warn("RoundManager: Kodo template not found in ServerStorage!")
+	end
+
+	return gameArea and spawnLocations and kodoSpawns and kodoTemplate
 end
 
 -- Game state
@@ -190,6 +222,10 @@ showWavePreview.Parent = ReplicatedStorage
 local roundStarted = Instance.new("RemoteEvent")
 roundStarted.Name = "RoundStarted"
 roundStarted.Parent = ReplicatedStorage
+
+local showFarmIncome = Instance.new("RemoteEvent")
+showFarmIncome.Name = "ShowFarmIncome"
+showFarmIncome.Parent = ReplicatedStorage
 
 -- Wave preview timing
 local WAVE_PREVIEW_TIME = 5 -- Seconds to show preview before spawning
@@ -347,8 +383,8 @@ local function removeFromDeadList(player)
 end
 
 -- Spawn a player in game
-local function spawnPlayerInGame(player)
-	if not gameActive then
+local function spawnPlayerInGame(player, forceSpawn)
+	if not gameActive and not forceSpawn then
 		warn("Cannot spawn player - game not active")
 		return false
 	end
@@ -367,7 +403,7 @@ local function spawnPlayerInGame(player)
 	local character = player.Character or player.CharacterAdded:Wait()
 	wait(0.1)
 
-	if character and gameActive then
+	if character and (gameActive or forceSpawn) then
 		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 		if humanoidRootPart then
 			local spawnPoint = getRandomSpawn()
@@ -459,7 +495,14 @@ local function spawnKodoWave()
 	end
 
 	local shrine = (gameArea and gameArea:FindFirstChild("ResurrectionShrine")) or (gameArea and gameArea:FindFirstChild("RessurectionShrine")) or workspace:FindFirstChild("ResurrectionShrine")
-	local shrinePos = shrine and shrine.Position or Vector3.new(0, 0, 0)
+	local shrinePos = Vector3.new(0, 0, 0)
+	if shrine then
+		if shrine:IsA("Model") and shrine.PrimaryPart then
+			shrinePos = shrine.PrimaryPart.Position
+		elseif shrine:IsA("BasePart") then
+			shrinePos = shrine.Position
+		end
+	end
 
 	-- Get game config for difficulty
 	local gameConfig = _G.GameConfig or {}
@@ -731,9 +774,16 @@ local function startRound()
 
 	showNotification:FireAllClients("Round " .. currentRound .. " starting!", Color3.new(0, 1, 1))
 
-	-- Spawn all players
+	-- Spawn/respawn players (only if they don't have a character)
 	for _, player in ipairs(Players:GetPlayers()) do
-		spawnPlayerInGame(player)
+		if not player.Character or not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then
+			spawnPlayerInGame(player)
+		else
+			-- Player already has character, just add to alive list
+			RoundManager.initPlayerStats(player)
+			removeFromDeadList(player)
+			addToAliveList(player)
+		end
 	end
 
 	print("Spawned " .. #alivePlayers .. " players")
@@ -742,7 +792,24 @@ local function startRound()
 	-- Notify clients that round has started (hide loading screen)
 	roundStarted:FireAllClients()
 
-	wait(2)
+	-- BUILD PHASE - give players time to prepare
+	showNotification:FireAllClients("BUILD PHASE - Prepare your defenses!", Color3.new(0, 1, 0))
+	print("=== BUILD PHASE START ===")
+
+	for i = BUILD_PHASE_TIME, 1, -1 do
+		if i == 10 then
+			showNotification:FireAllClients("Kodos spawning in 10 seconds!", Color3.new(1, 1, 0))
+		elseif i == 5 then
+			showNotification:FireAllClients("Kodos spawning in 5 seconds!", Color3.new(1, 0.5, 0))
+		elseif i <= 3 then
+			showNotification:FireAllClients(tostring(i) .. "...", Color3.new(1, 0, 0))
+		end
+		wait(1)
+	end
+
+	print("=== BUILD PHASE END ===")
+	showNotification:FireAllClients("KODOS INCOMING!", Color3.new(1, 0, 0))
+	wait(1)
 
 	-- Spawn initial wave
 	spawnKodoWave()
@@ -761,6 +828,7 @@ local function startRound()
 
 				-- Count farms owned by this player (excluding those under construction)
 				local farmCount = 0
+				local playerFarms = {}
 				for _, obj in ipairs(workspace:GetChildren()) do
 					if obj.Name == "Farm" then
 						local owner = obj:FindFirstChild("Owner")
@@ -768,6 +836,7 @@ local function startRound()
 						-- Only count completed farms
 						if owner and owner.Value == player.Name and not (underConstruction and underConstruction.Value) then
 							farmCount = farmCount + 1
+							table.insert(playerFarms, obj)
 						end
 					end
 				end
@@ -783,7 +852,15 @@ local function startRound()
 				local totalIncome = 1 + farmCount + farmEfficiencyBonus
 				playerStats[player.Name].gold = playerStats[player.Name].gold + totalIncome
 
+				-- Show floating text above each farm
 				if farmCount > 0 then
+					local goldPerFarm = 1 + (farmEfficiencyBonus / farmCount)
+					local showFarmIncome = ReplicatedStorage:FindFirstChild("ShowFarmIncome")
+					if showFarmIncome then
+						for _, farm in ipairs(playerFarms) do
+							showFarmIncome:FireAllClients(farm, goldPerFarm)
+						end
+					end
 					print("RoundManager:", player.Name, "earned", totalIncome, "gold (1 base +", farmCount, "farms +", farmEfficiencyBonus, "efficiency)")
 				end
 			end
@@ -826,6 +903,12 @@ local function startGameLoop()
 		wait(0.5)
 	end
 
+	-- Wait for map to generate and acquire references
+	if not acquireMapReferences() then
+		warn("RoundManager: Failed to acquire map references! Cannot start game.")
+		return
+	end
+
 	-- Get game configuration
 	local gameConfig = _G.GameConfig
 	print("RoundManager: Game starting!")
@@ -834,16 +917,30 @@ local function startGameLoop()
 	print("  - Expected Players: " .. (gameConfig.expectedPlayers or 1))
 
 	-- Brief delay for players to load
-	wait(2)
+	wait(1)
 
 	-- Notify players
 	showNotification:FireAllClients("Game mode: " .. (gameConfig.padType or "SOLO"), Color3.new(0, 1, 1))
+
+	-- Initialize game state for first spawn
+	currentRound = 0
+	alivePlayers = {}
+	deadPlayers = {}
+	activeKodos = {}
+
+	-- Spawn players immediately so they can look around
+	for _, player in ipairs(Players:GetPlayers()) do
+		spawnPlayerInGame(player, true) -- Force spawn before game active
+	end
+	print("Spawned " .. #alivePlayers .. " players for first round")
+
+	-- gameActive stays false so startRound() can proceed
 
 	while true do
 		-- Intermission
 		print("=== INTERMISSION ===")
 		for i = INTERMISSION_TIME, 0, -1 do
-			showNotification:FireAllClients("Round starting in " .. i .. " seconds", Color3.new(1, 1, 1))
+			showNotification:FireAllClients("Get ready! Round starting in " .. i .. "...", Color3.new(1, 1, 1))
 			wait(1)
 		end
 

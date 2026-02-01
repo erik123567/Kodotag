@@ -11,16 +11,25 @@ end
 local function createHealthBar(structure)
 	print("StructureHealthBars: Attempting to create health bar for", structure.Name)
 
-	-- Wait longer for Health value to be added
+	-- Wait for Health value to be added
 	local health = structure:WaitForChild("Health", 10)
 	if not health then
 		warn("StructureHealthBars: No Health value found for", structure.Name, "after 10 seconds")
 		return
 	end
 
-	print("StructureHealthBars: Found Health value:", health.Value)
+	-- Wait for MaxHealth value (may take a moment)
+	local maxHealthValue = structure:WaitForChild("MaxHealth", 5)
+	if not maxHealthValue then
+		-- Create MaxHealth if it doesn't exist (fallback)
+		maxHealthValue = Instance.new("IntValue")
+		maxHealthValue.Name = "MaxHealth"
+		maxHealthValue.Value = health.Value
+		maxHealthValue.Parent = structure
+	end
 
-	local maxHealth = health.Value
+	print("StructureHealthBars: Found Health:", health.Value, "MaxHealth:", maxHealthValue.Value)
+
 	local structurePart = structure:IsA("Model") and structure.PrimaryPart or structure
 
 	if not structurePart then
@@ -65,7 +74,7 @@ local function createHealthBar(structure)
 	healthText.Name = "HealthText"
 	healthText.Size = UDim2.new(1, 0, 1, 0)
 	healthText.BackgroundTransparency = 1
-	healthText.Text = health.Value .. " / " .. maxHealth
+	healthText.Text = health.Value .. " / " .. maxHealthValue.Value
 	healthText.TextColor3 = Color3.new(1, 1, 1)
 	healthText.TextScaled = true
 	healthText.Font = Enum.Font.GothamBold
@@ -74,11 +83,14 @@ local function createHealthBar(structure)
 
 	print("StructureHealthBars: Created health bar for", structure.Name)
 
-	-- Update when health changes
-	health.Changed:Connect(function(newHealth)
-		local healthPercent = newHealth / maxHealth
-		healthBar.Size = UDim2.new(healthPercent, 0, 1, 0)
-		healthText.Text = math.floor(newHealth) .. " / " .. maxHealth
+	-- Function to update health bar display
+	local function updateHealthBar()
+		local currentMax = maxHealthValue.Value
+		local currentHealth = health.Value
+		local healthPercent = currentMax > 0 and (currentHealth / currentMax) or 0
+
+		healthBar.Size = UDim2.new(math.clamp(healthPercent, 0, 1), 0, 1, 0)
+		healthText.Text = math.floor(currentHealth) .. " / " .. currentMax
 
 		-- Color based on health
 		if healthPercent > 0.6 then
@@ -88,7 +100,13 @@ local function createHealthBar(structure)
 		else
 			healthBar.BackgroundColor3 = Color3.new(1, 0, 0)
 		end
-	end)
+	end
+
+	-- Update when health changes
+	health.Changed:Connect(updateHealthBar)
+
+	-- Update when max health changes (from aura buffs)
+	maxHealthValue.Changed:Connect(updateHealthBar)
 end
 
 -- Valid structure names
@@ -96,7 +114,9 @@ local VALID_STRUCTURES = {
 	Barricade = true, Wall = true,
 	Turret = true, FastTurret = true, SlowTurret = true,
 	FrostTurret = true, PoisonTurret = true, MultiShotTurret = true, CannonTurret = true,
-	Farm = true, Workshop = true
+	Farm = true, Workshop = true,
+	-- Aura buildings
+	SpeedAura = true, DamageAura = true, FortifyAura = true, RangeAura = true, RegenAura = true
 }
 
 -- Monitor workspace for new structures

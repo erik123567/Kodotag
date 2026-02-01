@@ -590,6 +590,18 @@ if isReservedServer then
 		showGameOver.OnClientEvent:Connect(function(data)
 			print("Game Over received - showing results screen")
 
+			-- Fetch global leaderboard
+			local globalTop10 = {}
+			local getHighScore = ReplicatedStorage:FindFirstChild("GetHighScore")
+			if getHighScore then
+				local success, result = pcall(function()
+					return getHighScore:InvokeServer("global")
+				end)
+				if success and result then
+					globalTop10 = result
+				end
+			end
+
 			-- Hide game UI
 			gameInfoPanel.Visible = false
 			playerStatsFrame.Visible = false
@@ -860,6 +872,121 @@ if isReservedServer then
 
 			-- Update canvas size
 			playerList.CanvasSize = UDim2.new(0, 0, 0, #sortedPlayers * 36)
+
+			-- ============================================
+			-- GLOBAL TOP 10 LEADERBOARD (Right side)
+			-- ============================================
+			if #globalTop10 > 0 then
+				-- Create global leaderboard frame (to the right of session stats)
+				local globalFrame = Instance.new("Frame")
+				globalFrame.Name = "GlobalLeaderboard"
+				globalFrame.Size = UDim2.new(0.35, 0, 0.55, 0)
+				globalFrame.Position = UDim2.new(1.05, 0, 0.08, 0)
+				globalFrame.BackgroundColor3 = Color3.new(0.08, 0.08, 0.12)
+				globalFrame.BackgroundTransparency = 0.1
+				globalFrame.BorderSizePixel = 0
+				globalFrame.Parent = gameOverScreen
+
+				local globalCorner = Instance.new("UICorner")
+				globalCorner.CornerRadius = UDim.new(0, 10)
+				globalCorner.Parent = globalFrame
+
+				local globalStroke = Instance.new("UIStroke")
+				globalStroke.Color = Color3.new(1, 0.85, 0)
+				globalStroke.Thickness = 2
+				globalStroke.Parent = globalFrame
+
+				-- Global title
+				local globalTitle = Instance.new("TextLabel")
+				globalTitle.Size = UDim2.new(1, 0, 0, 30)
+				globalTitle.Position = UDim2.new(0, 0, 0, 5)
+				globalTitle.BackgroundTransparency = 1
+				globalTitle.Text = "GLOBAL TOP 10"
+				globalTitle.TextColor3 = Color3.new(1, 0.85, 0)
+				globalTitle.Font = Enum.Font.GothamBlack
+				globalTitle.TextSize = 18
+				globalTitle.Parent = globalFrame
+
+				-- Global player list
+				local globalList = Instance.new("ScrollingFrame")
+				globalList.Name = "GlobalList"
+				globalList.Size = UDim2.new(1, -16, 1, -45)
+				globalList.Position = UDim2.new(0, 8, 0, 40)
+				globalList.BackgroundTransparency = 1
+				globalList.BorderSizePixel = 0
+				globalList.ScrollBarThickness = 4
+				globalList.ScrollBarImageColor3 = Color3.new(0.6, 0.5, 0.2)
+				globalList.Parent = globalFrame
+
+				local globalLayout = Instance.new("UIListLayout")
+				globalLayout.Padding = UDim.new(0, 3)
+				globalLayout.Parent = globalList
+
+				-- Create rows for top 10
+				for _, entry in ipairs(globalTop10) do
+					local isMe = (entry.name == player.Name)
+					local rankColor = entry.rank == 1 and Color3.new(1, 0.85, 0) or
+									  entry.rank == 2 and Color3.new(0.75, 0.75, 0.8) or
+									  entry.rank == 3 and Color3.new(0.8, 0.5, 0.2) or
+									  Color3.new(0.6, 0.6, 0.6)
+
+					local entryRow = Instance.new("Frame")
+					entryRow.Name = "Rank" .. entry.rank
+					entryRow.Size = UDim2.new(1, 0, 0, 28)
+					entryRow.BackgroundColor3 = isMe and Color3.new(0.2, 0.3, 0.15) or Color3.new(0.1, 0.1, 0.12)
+					entryRow.BackgroundTransparency = 0.3
+					entryRow.Parent = globalList
+
+					local entryCorner = Instance.new("UICorner")
+					entryCorner.CornerRadius = UDim.new(0, 5)
+					entryCorner.Parent = entryRow
+
+					if isMe then
+						local meStroke = Instance.new("UIStroke")
+						meStroke.Color = Color3.new(0.5, 1, 0.5)
+						meStroke.Thickness = 2
+						meStroke.Parent = entryRow
+					end
+
+					-- Rank
+					local rankLabel = Instance.new("TextLabel")
+					rankLabel.Size = UDim2.new(0.15, 0, 1, 0)
+					rankLabel.Position = UDim2.new(0, 0, 0, 0)
+					rankLabel.BackgroundTransparency = 1
+					rankLabel.Text = "#" .. entry.rank
+					rankLabel.TextColor3 = rankColor
+					rankLabel.Font = Enum.Font.GothamBlack
+					rankLabel.TextSize = 14
+					rankLabel.Parent = entryRow
+
+					-- Name
+					local nameLabel = Instance.new("TextLabel")
+					nameLabel.Size = UDim2.new(0.55, 0, 1, 0)
+					nameLabel.Position = UDim2.new(0.15, 0, 0, 0)
+					nameLabel.BackgroundTransparency = 1
+					nameLabel.Text = entry.name
+					nameLabel.TextColor3 = isMe and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1)
+					nameLabel.Font = Enum.Font.GothamBold
+					nameLabel.TextSize = 12
+					nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+					nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+					nameLabel.Parent = entryRow
+
+					-- Wave
+					local waveLabel = Instance.new("TextLabel")
+					waveLabel.Size = UDim2.new(0.3, 0, 1, 0)
+					waveLabel.Position = UDim2.new(0.7, 0, 0, 0)
+					waveLabel.BackgroundTransparency = 1
+					waveLabel.Text = "Wave " .. entry.wave
+					waveLabel.TextColor3 = Color3.new(1, 0.7, 0.3)
+					waveLabel.Font = Enum.Font.GothamBold
+					waveLabel.TextSize = 12
+					waveLabel.Parent = entryRow
+				end
+
+				-- Update canvas size
+				globalList.CanvasSize = UDim2.new(0, 0, 0, #globalTop10 * 31)
+			end
 
 			-- Return countdown
 			local countdownLabel = Instance.new("TextLabel")

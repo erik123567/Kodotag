@@ -1,4 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 -- Only run on game servers (reserved servers)
 local isReservedServer = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
@@ -9,6 +10,12 @@ end
 
 local TurretManager = {}
 TurretManager.activeTurrets = {}
+TurretManager.turretRotations = {} -- Track current turret facing directions
+
+-- Create damage number event
+local showDamageNumber = Instance.new("RemoteEvent")
+showDamageNumber.Name = "ShowDamageNumber"
+showDamageNumber.Parent = ReplicatedStorage
 
 -- Load KodoAI for damage multipliers
 local KodoAI = require(script.Parent.KodoAI)
@@ -27,56 +34,56 @@ local TURRET_DAMAGE_TYPES = {
 -- Turret stats with damage types for resistance calculations
 local TURRET_STATS = {
 	Turret = {
-		damage = 50,
-		fireRate = 0.5,
-		range = 50,
+		damage = 15,
+		fireRate = 0.8,
+		range = 40,
 		projectileSpeed = 100,
 		projectileColor = Color3.new(1, 0.8, 0),
 		damageType = "physical"
 	},
 	FastTurret = {
-		damage = 40,
-		fireRate = 0.2,
-		range = 40,
+		damage = 8,
+		fireRate = 0.25,
+		range = 35,
 		projectileSpeed = 120,
 		projectileColor = Color3.new(0, 1, 1),
 		damageType = "physical"
 	},
 	SlowTurret = {
-		damage = 60,
-		fireRate = 1.0,
-		range = 60,
+		damage = 35,
+		fireRate = 1.5,
+		range = 50,
 		projectileSpeed = 80,
 		projectileColor = Color3.new(1, 0, 0),
 		damageType = "physical"
 	},
 	FrostTurret = {
-		damage = 20,
-		fireRate = 0.8,
-		range = 45,
+		damage = 10,
+		fireRate = 1.0,
+		range = 40,
 		projectileSpeed = 90,
-		projectileColor = Color3.new(0.5, 0.8, 1),
+		projectileColor = Color3.new(0.3, 0.6, 1), -- Blue projectile
 		damageType = "frost",
 		specialEffect = "frost",
-		slowAmount = 0.5, -- 50% speed reduction
-		slowDuration = 3
+		slowAmount = 0.7, -- 30% speed reduction (0.7 = 70% of original speed)
+		slowDuration = 3.0
 	},
 	PoisonTurret = {
-		damage = 15,
-		fireRate = 1.0,
-		range = 50,
+		damage = 8,
+		fireRate = 1.2,
+		range = 45,
 		projectileSpeed = 80,
 		projectileColor = Color3.new(0.2, 0.8, 0.2),
 		damageType = "poison",
 		specialEffect = "poison",
-		poisonDamage = 10,
-		poisonDuration = 5,
+		poisonDamage = 5,
+		poisonDuration = 6,
 		poisonTickRate = 1
 	},
 	MultiShotTurret = {
-		damage = 25,
-		fireRate = 0.6,
-		range = 40,
+		damage = 10,
+		fireRate = 0.8,
+		range = 35,
 		projectileSpeed = 110,
 		projectileColor = Color3.new(1, 0.5, 0),
 		damageType = "multishot",
@@ -84,14 +91,14 @@ local TURRET_STATS = {
 		projectileCount = 3
 	},
 	CannonTurret = {
-		damage = 80,
-		fireRate = 2.0,
-		range = 55,
+		damage = 50,
+		fireRate = 2.5,
+		range = 45,
 		projectileSpeed = 60,
 		projectileColor = Color3.new(0.3, 0.3, 0.3),
 		damageType = "aoe",
 		specialEffect = "aoe",
-		aoeRadius = 15,
+		aoeRadius = 12,
 		aoeDamageFalloff = 0.5 -- enemies at edge take 50% damage
 	}
 }
@@ -102,24 +109,47 @@ local activeEffects = {
 	poison = {} -- [kodo] = {endTime, nextTickTime, damage}
 }
 
+-- Get the turret's shoot position (top center of turret)
+local function getTurretShootPosition(turret)
+	local base = turret:IsA("Model") and turret.PrimaryPart or turret
+	if base then
+		-- Shoot from top of turret
+		return base.Position + Vector3.new(0, base.Size.Y / 2 + 1, 0)
+	end
+	return nil
+end
+
 -- Create muzzle flash effect
 local function createMuzzleFlash(turret, color)
-	local base = turret:IsA("Model") and turret.PrimaryPart or turret
-	if not base then return end
+	local shootPos = getTurretShootPosition(turret)
+	if not shootPos then return end
 
 	local flash = Instance.new("Part")
 	flash.Name = "MuzzleFlash"
 	flash.Shape = Enum.PartType.Ball
-	flash.Size = Vector3.new(1, 1, 1)
+	flash.Size = Vector3.new(1.2, 1.2, 1.2)
 	flash.Material = Enum.Material.Neon
 	flash.Color = color or Color3.new(1, 1, 0)
 	flash.Anchored = true
 	flash.CanCollide = false
-	flash.CFrame = base.CFrame * CFrame.new(0, 2, -2)
+	flash.CFrame = CFrame.new(shootPos)
 	flash.Parent = workspace
 
+	-- Add point light for flash effect
+	local light = Instance.new("PointLight")
+	light.Color = color or Color3.new(1, 1, 0)
+	light.Brightness = 3
+	light.Range = 8
+	light.Parent = flash
+
 	task.spawn(function()
-		wait(0.1)
+		-- Quick fade out
+		for i = 1, 5 do
+			flash.Transparency = i / 5
+			flash.Size = flash.Size * 0.8
+			light.Brightness = light.Brightness * 0.6
+			wait(0.02)
+		end
 		flash:Destroy()
 	end)
 end
@@ -132,60 +162,95 @@ local function applyFrostEffect(target, stats, multiplier)
 	multiplier = multiplier or 1.0
 	if multiplier == 0 then return end -- Immune
 
-	local originalSpeed = humanoid.WalkSpeed
 	local currentTime = tick()
 	-- More effective slow on weak targets
 	local effectiveDuration = stats.slowDuration * (multiplier > 1 and 1.5 or 1)
 	local endTime = currentTime + effectiveDuration
 
-	-- Check if already frosted
-	if activeEffects.frost[target] and activeEffects.frost[target] > currentTime then
-		-- Extend duration instead
-		activeEffects.frost[target] = endTime
-		return
+	-- Check if already frosted - just extend duration
+	if activeEffects.frost[target] then
+		if activeEffects.frost[target].endTime > currentTime then
+			activeEffects.frost[target].endTime = endTime
+			return
+		end
 	end
 
-	activeEffects.frost[target] = endTime
-	-- More effective slow on weak targets
+	-- Store original speed and apply slow
+	local originalSpeed = humanoid.WalkSpeed
 	local slowAmount = stats.slowAmount
 	if multiplier > 1 then
-		slowAmount = slowAmount * 0.7 -- Even slower (30% more slow)
+		slowAmount = slowAmount * 0.8 -- Even slower if weak to frost
 	end
 	humanoid.WalkSpeed = originalSpeed * slowAmount
 
-	-- Visual frost effect
-	local frostEffect = Instance.new("Part")
-	frostEffect.Name = "FrostEffect"
-	frostEffect.Shape = Enum.PartType.Ball
-	frostEffect.Size = Vector3.new(4, 4, 4)
-	frostEffect.Material = Enum.Material.Ice
-	frostEffect.Color = Color3.new(0.5, 0.8, 1)
-	frostEffect.Transparency = 0.7
-	frostEffect.Anchored = false
-	frostEffect.CanCollide = false
-	frostEffect.Parent = target
+	-- Create visual frost indicator (BillboardGui above head - no physics!)
+	local hrp = target:FindFirstChild("HumanoidRootPart")
+	local frostIndicator = nil
 
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = frostEffect
-	weld.Part1 = target:FindFirstChild("HumanoidRootPart")
-	weld.Parent = frostEffect
+	if hrp then
+		frostIndicator = Instance.new("BillboardGui")
+		frostIndicator.Name = "FrostIndicator"
+		frostIndicator.Size = UDim2.new(0, 50, 0, 20)
+		frostIndicator.StudsOffset = Vector3.new(0, 4, 0)
+		frostIndicator.AlwaysOnTop = true
+		frostIndicator.Adornee = hrp
+		frostIndicator.Parent = hrp
 
-	if target:FindFirstChild("HumanoidRootPart") then
-		frostEffect.CFrame = target.HumanoidRootPart.CFrame
+		local frostLabel = Instance.new("TextLabel")
+		frostLabel.Size = UDim2.new(1, 0, 1, 0)
+		frostLabel.BackgroundTransparency = 1
+		frostLabel.Text = "SLOWED"
+		frostLabel.TextColor3 = Color3.new(0.3, 0.7, 1)
+		frostLabel.TextStrokeColor3 = Color3.new(0, 0, 0.3)
+		frostLabel.TextStrokeTransparency = 0.3
+		frostLabel.Font = Enum.Font.GothamBold
+		frostLabel.TextScaled = true
+		frostLabel.Parent = frostIndicator
+
+		-- Add particle effect on HumanoidRootPart (no physics interference)
+		local frostParticles = Instance.new("ParticleEmitter")
+		frostParticles.Name = "FrostParticles"
+		frostParticles.Color = ColorSequence.new(Color3.new(0.5, 0.8, 1))
+		frostParticles.Size = NumberSequence.new(0.3, 0)
+		frostParticles.Transparency = NumberSequence.new(0.3, 1)
+		frostParticles.Lifetime = NumberRange.new(0.5, 1)
+		frostParticles.Rate = 10
+		frostParticles.Speed = NumberRange.new(1, 2)
+		frostParticles.SpreadAngle = Vector2.new(180, 180)
+		frostParticles.Parent = hrp
+
+		-- Store particles reference for cleanup
+		activeEffects.frost[target] = {
+			endTime = endTime,
+			originalSpeed = originalSpeed,
+			indicator = frostIndicator,
+			particles = frostParticles
+		}
+	else
+		activeEffects.frost[target] = {
+			endTime = endTime,
+			originalSpeed = originalSpeed
+		}
 	end
 
+	-- Cleanup after duration
 	task.spawn(function()
-		wait(stats.slowDuration)
+		wait(effectiveDuration)
 		if humanoid and humanoid.Parent then
-			humanoid.WalkSpeed = originalSpeed
+			humanoid.WalkSpeed = activeEffects.frost[target] and activeEffects.frost[target].originalSpeed or originalSpeed
+		end
+		if activeEffects.frost[target] then
+			if activeEffects.frost[target].indicator then
+				activeEffects.frost[target].indicator:Destroy()
+			end
+			if activeEffects.frost[target].particles then
+				activeEffects.frost[target].particles:Destroy()
+			end
 		end
 		activeEffects.frost[target] = nil
-		if frostEffect and frostEffect.Parent then
-			frostEffect:Destroy()
-		end
 	end)
 
-	print("TurretManager: Applied frost to", target.Name, "for", stats.slowDuration, "seconds")
+	print("TurretManager: Applied frost to", target.Name, "- 30% slow for", effectiveDuration, "seconds")
 end
 
 -- Apply poison effect (DoT)
@@ -243,6 +308,13 @@ local function applyPoisonEffect(target, stats, multiplier)
 					else
 						humanoid.Health = newHealth
 					end
+
+					-- Show damage number for poison tick
+					local targetRoot = target:FindFirstChild("HumanoidRootPart")
+					if targetRoot then
+						showDamageNumber:FireAllClients(targetRoot.Position, stats.poisonDamage, "poison", false, false)
+					end
+
 					print("TurretManager: Poison tick dealt", stats.poisonDamage, "damage")
 				end
 				activeEffects.poison[target].nextTickTime = tick() + stats.poisonTickRate
@@ -297,6 +369,14 @@ local function applyAOEDamage(position, stats)
 				humanoid.Health = newHealth
 			end
 
+			-- Show damage number
+			local kodoRoot = kodoData.kodo:FindFirstChild("HumanoidRootPart")
+			if kodoRoot then
+				local isWeak = multiplier < 1
+				local isStrong = multiplier > 1
+				showDamageNumber:FireAllClients(kodoRoot.Position, finalDamage, "aoe", isWeak, isStrong)
+			end
+
 			local damageText = finalDamage .. (multiplier > 1 and " (Weak)" or (multiplier < 1 and " (Resist)" or ""))
 			print("TurretManager: AOE dealt", damageText, "to", kodoData.kodo.Name)
 		end
@@ -327,18 +407,18 @@ end
 
 -- Create and fire a single projectile
 local function fireSingleProjectile(turret, target, stats, offset)
-	local base = turret:IsA("Model") and turret.PrimaryPart or turret
-	if not base then return end
+	local shootPos = getTurretShootPosition(turret)
+	if not shootPos then return end
 
-	local targetPos = target:FindFirstChild("HumanoidRootPart")
-	if not targetPos then return end
+	local targetRoot = target:FindFirstChild("HumanoidRootPart")
+	if not targetRoot then return end
 
 	offset = offset or Vector3.new(0, 0, 0)
 
 	-- Cannon turrets have bigger projectiles
-	local bulletSize = stats.specialEffect == "aoe" and Vector3.new(1.5, 1.5, 1.5) or Vector3.new(0.5, 0.5, 0.5)
+	local bulletSize = stats.specialEffect == "aoe" and Vector3.new(1.5, 1.5, 1.5) or Vector3.new(0.6, 0.6, 0.6)
 
-	-- Create bullet
+	-- Create bullet at turret's shoot position
 	local bullet = Instance.new("Part")
 	bullet.Name = "Bullet"
 	bullet.Shape = Enum.PartType.Ball
@@ -347,22 +427,51 @@ local function fireSingleProjectile(turret, target, stats, offset)
 	bullet.Color = stats.projectileColor
 	bullet.Anchored = true
 	bullet.CanCollide = false
-	bullet.CFrame = base.CFrame * CFrame.new(0 + offset.X, 2 + offset.Y, 0 + offset.Z)
+	bullet.CFrame = CFrame.new(shootPos + offset)
 	bullet.Parent = workspace
 
-	-- Add trail
-	local attachment0 = Instance.new("Attachment", bullet)
+	-- Add proper trail with two attachments at opposite ends
+	local attachment0 = Instance.new("Attachment")
+	attachment0.Position = Vector3.new(0, 0, bulletSize.Z * 0.4)
+	attachment0.Parent = bullet
+
+	local attachment1 = Instance.new("Attachment")
+	attachment1.Position = Vector3.new(0, 0, -bulletSize.Z * 0.4)
+	attachment1.Parent = bullet
+
 	local trail = Instance.new("Trail")
 	trail.Attachment0 = attachment0
-	trail.Attachment1 = attachment0
-	trail.Lifetime = 0.2
-	trail.Color = ColorSequence.new(stats.projectileColor)
+	trail.Attachment1 = attachment1
+	trail.Lifetime = 0.15
+	trail.MinLength = 0.1
+	trail.FaceCamera = true
+	trail.WidthScale = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.5, 0.5),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.5, 0.3),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	trail.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, stats.projectileColor),
+		ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
+	})
 	trail.Parent = bullet
+
+	-- Add glow effect to bullet
+	local light = Instance.new("PointLight")
+	light.Color = stats.projectileColor
+	light.Brightness = 1.5
+	light.Range = 4
+	light.Parent = bullet
 
 	-- Move bullet toward target
 	task.spawn(function()
 		local startPos = bullet.Position
-		local endPos = targetPos.Position + offset * 2
+		local endPos = targetRoot.Position + offset * 2
 		local distance = (endPos - startPos).Magnitude
 		local duration = distance / stats.projectileSpeed
 		local startTime = tick()
@@ -375,7 +484,7 @@ local function fireSingleProjectile(turret, target, stats, offset)
 			end
 
 			local progress = (tick() - startTime) / duration
-			endPos = targetPos.Position + offset * 2
+			endPos = targetRoot.Position + offset * 2
 			bullet.CFrame = CFrame.new(startPos:Lerp(endPos, progress))
 
 			wait()
@@ -408,6 +517,14 @@ local function fireSingleProjectile(turret, target, stats, offset)
 					local newHealth = humanoid.Health - finalDamage
 					print("TurretManager: Dealt", damageText, "to", target.Name, ". Health:", humanoid.Health, "->", math.max(0, newHealth))
 
+					-- Show damage number to clients
+					local targetRoot = target:FindFirstChild("HumanoidRootPart")
+					if targetRoot then
+						local isWeak = multiplier < 1
+						local isStrong = multiplier > 1
+						showDamageNumber:FireAllClients(targetRoot.Position, finalDamage, damageType, isWeak, isStrong)
+					end
+
 					if newHealth <= 0 then
 						humanoid.Health = 0
 						print("TurretManager: Kodo killed!")
@@ -434,6 +551,9 @@ local function fireSingleProjectile(turret, target, stats, offset)
 				impactColor = Color3.new(1, 0.3, 0)
 			end
 
+			local impactPosition = bullet.Position
+
+			-- Create impact flash
 			local impact = Instance.new("Part")
 			impact.Shape = Enum.PartType.Ball
 			impact.Size = stats.specialEffect == "aoe" and Vector3.new(3, 3, 3) or Vector3.new(1.5, 1.5, 1.5)
@@ -444,10 +564,41 @@ local function fireSingleProjectile(turret, target, stats, offset)
 			impact.CFrame = bullet.CFrame
 			impact.Parent = workspace
 
+			-- Add impact light
+			local impactLight = Instance.new("PointLight")
+			impactLight.Color = impactColor
+			impactLight.Brightness = 4
+			impactLight.Range = 10
+			impactLight.Parent = impact
+
+			-- Create particle burst on impact
+			local attachment = Instance.new("Attachment")
+			attachment.Parent = impact
+
+			local particles = Instance.new("ParticleEmitter")
+			particles.Color = ColorSequence.new(impactColor)
+			particles.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.5),
+				NumberSequenceKeypoint.new(1, 0)
+			})
+			particles.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(1, 1)
+			})
+			particles.Lifetime = NumberRange.new(0.2, 0.4)
+			particles.Rate = 0 -- We'll emit manually
+			particles.Speed = NumberRange.new(8, 15)
+			particles.SpreadAngle = Vector2.new(180, 180)
+			particles.Parent = attachment
+
+			-- Emit burst of particles
+			particles:Emit(stats.specialEffect == "aoe" and 25 or 10)
+
 			task.spawn(function()
 				for i = 1, 10 do
 					impact.Transparency = i / 10
-					impact.Size = impact.Size + Vector3.new(0.2, 0.2, 0.2)
+					impact.Size = impact.Size + Vector3.new(0.3, 0.3, 0.3)
+					impactLight.Brightness = impactLight.Brightness * 0.7
 					wait(0.02)
 				end
 				impact:Destroy()
@@ -462,6 +613,9 @@ end
 
 -- Create and fire projectile(s)
 local function fireProjectile(turret, target, stats)
+	local targetRoot = target:FindFirstChild("HumanoidRootPart")
+	if not targetRoot then return end
+
 	-- Muzzle flash
 	createMuzzleFlash(turret, stats.projectileColor)
 
@@ -504,8 +658,8 @@ local function findNearestKodo(turretPosition, range)
 	return nearestKodo
 end
 
--- Get modified stats based on owner's upgrades
-local function getModifiedStats(baseStats, ownerName)
+-- Get modified stats based on owner's upgrades and aura buffs
+local function getModifiedStats(baseStats, ownerName, turret)
 	local modifiedStats = {}
 
 	-- Copy base stats
@@ -527,8 +681,28 @@ local function getModifiedStats(baseStats, ownerName)
 		-- Extended Range upgrade
 		local rangeBonus = _G.UpgradeManager.getUpgradeEffect(ownerName, "ExtendedRange")
 		modifiedStats.range = math.floor(baseStats.range * (1 + rangeBonus))
+	end
 
-		print("TurretManager: Modified stats for", ownerName, "- Damage:", modifiedStats.damage, "FireRate:", modifiedStats.fireRate, "Range:", modifiedStats.range)
+	-- Apply aura buffs if AuraManager is available
+	if _G.AuraManager and turret then
+		-- Damage aura
+		local damageAuraBonus = _G.AuraManager.getBuffBonus(turret, "damage")
+		if damageAuraBonus > 0 then
+			modifiedStats.damage = math.floor(modifiedStats.damage * (1 + damageAuraBonus))
+		end
+
+		-- Attack speed aura (reduces fire rate)
+		local speedAuraBonus = _G.AuraManager.getBuffBonus(turret, "attackSpeed")
+		if speedAuraBonus > 0 then
+			modifiedStats.fireRate = modifiedStats.fireRate * (1 - speedAuraBonus)
+			modifiedStats.fireRate = math.max(modifiedStats.fireRate, 0.1)
+		end
+
+		-- Range aura
+		local rangeAuraBonus = _G.AuraManager.getBuffBonus(turret, "range")
+		if rangeAuraBonus > 0 then
+			modifiedStats.range = math.floor(modifiedStats.range * (1 + rangeAuraBonus))
+		end
 	end
 
 	return modifiedStats
@@ -544,8 +718,8 @@ function TurretManager.activateTurret(turret, ownerName)
 		return
 	end
 
-	-- Get modified stats based on owner's upgrades
-	local stats = getModifiedStats(baseStats, ownerName)
+	-- Get modified stats based on owner's upgrades and auras
+	local stats = getModifiedStats(baseStats, ownerName, turret)
 
 	local turretPosition = turret:IsA("Model") and turret.PrimaryPart.Position or turret.Position
 
@@ -555,8 +729,8 @@ function TurretManager.activateTurret(turret, ownerName)
 	-- Shooting loop
 	task.spawn(function()
 		while turret and turret.Parent do
-			-- Re-fetch modified stats each shot to pick up upgrades purchased mid-game
-			local currentStats = getModifiedStats(baseStats, ownerName)
+			-- Re-fetch modified stats each shot to pick up upgrades and aura changes
+			local currentStats = getModifiedStats(baseStats, ownerName, turret)
 			local target = findNearestKodo(turretPosition, currentStats.range)
 
 			if target then

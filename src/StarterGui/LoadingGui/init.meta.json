@@ -1,1 +1,1 @@
-{ "className": "ScreenGui", "properties": { "IgnoreGuiInset": true, "DisplayOrder": 100 } }
+{ "className": "ScreenGui", "properties": { "IgnoreGuiInset": true, "DisplayOrder": 1000, "ResetOnSpawn": false, "ZIndexBehavior": "Sibling" } }

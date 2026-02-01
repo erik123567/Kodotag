@@ -18,8 +18,20 @@ end
 local SPAWN_INTERVAL = 25 -- Seconds between spawn attempts
 local MAX_POWERUPS = 5 -- Maximum power-ups on map at once
 local DESPAWN_TIME = 30 -- Seconds before uncollected power-up disappears
-local SPAWN_RADIUS = 80 -- Distance from center to spawn power-ups
+local SPAWN_RADIUS_PERCENT = 0.4 -- Spawn within 40% of half-map-size from center
 local MIN_SPAWN_DISTANCE = 30 -- Minimum distance from any player's spawn
+
+-- Get map info from MapGenerator
+local function getMapInfo()
+	if _G.MapInfo then
+		return _G.MapInfo
+	end
+	return {
+		size = 200,
+		center = Vector3.new(0, 0, 0),
+		halfSize = 100
+	}
+end
 
 -- Power-up definitions
 local POWERUPS = {
@@ -28,10 +40,14 @@ local POWERUPS = {
 		description = "+50 Gold",
 		color = Color3.fromRGB(255, 215, 0),
 		effect = function(player)
-			-- Give gold
-			local goldValue = player:FindFirstChild("Gold")
-			if goldValue then
-				goldValue.Value = goldValue.Value + 50
+			-- Give gold via RoundManager
+			if _G.RoundManager and _G.RoundManager.playerStats then
+				local stats = _G.RoundManager.playerStats[player.Name]
+				if stats then
+					stats.gold = stats.gold + 50
+					_G.RoundManager.broadcastPlayerStats()
+					print("PowerUp: Gave 50 gold to", player.Name, "- New total:", stats.gold)
+				end
 			end
 		end,
 		duration = 0, -- Instant
@@ -60,39 +76,86 @@ local POWERUPS = {
 		weight = 20,
 	},
 	Shield = {
-		name = "Shield",
-		description = "Invincible for 5s",
-		color = Color3.fromRGB(100, 200, 255),
+		name = "Ghost",
+		description = "Invisible to Kodos for 5s",
+		color = Color3.fromRGB(150, 150, 255),
 		effect = function(player)
 			local character = player.Character
 			if character then
 				local humanoid = character:FindFirstChild("Humanoid")
 				if humanoid then
-					-- Create shield visual
-					local shield = Instance.new("Part")
-					shield.Name = "PowerUpShield"
-					shield.Shape = Enum.PartType.Ball
-					shield.Size = Vector3.new(8, 8, 8)
-					shield.Transparency = 0.7
-					shield.Color = Color3.fromRGB(100, 200, 255)
-					shield.Material = Enum.Material.ForceField
-					shield.CanCollide = false
-					shield.Anchored = false
-					shield.Parent = character
+					-- Add cloaked marker so Kodos ignore this player
+					local cloakedMarker = Instance.new("BoolValue")
+					cloakedMarker.Name = "Cloaked"
+					cloakedMarker.Value = true
+					cloakedMarker.Parent = character
 
-					local weld = Instance.new("WeldConstraint")
-					weld.Part0 = character:FindFirstChild("HumanoidRootPart")
-					weld.Part1 = shield
-					weld.Parent = shield
+					-- Make player semi-transparent
+					local originalTransparencies = {}
+					for _, part in ipairs(character:GetDescendants()) do
+						if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+							originalTransparencies[part] = part.Transparency
+							part.Transparency = 0.6
+						end
+					end
 
-					-- Store original health and make invincible
-					local forceField = Instance.new("ForceField")
-					forceField.Name = "PowerUpForceField"
-					forceField.Visible = false
-					forceField.Parent = character
+					-- Add ghost visual effect (particles, no physics)
+					local hrp = character:FindFirstChild("HumanoidRootPart")
+					local ghostParticles = nil
+					if hrp then
+						ghostParticles = Instance.new("ParticleEmitter")
+						ghostParticles.Name = "GhostParticles"
+						ghostParticles.Color = ColorSequence.new(Color3.new(0.6, 0.6, 1))
+						ghostParticles.Size = NumberSequence.new(0.5, 0)
+						ghostParticles.Transparency = NumberSequence.new(0.5, 1)
+						ghostParticles.Lifetime = NumberRange.new(0.5, 1)
+						ghostParticles.Rate = 15
+						ghostParticles.Speed = NumberRange.new(1, 2)
+						ghostParticles.SpreadAngle = Vector2.new(180, 180)
+						ghostParticles.Parent = hrp
+					end
 
-					Debris:AddItem(shield, 5)
-					Debris:AddItem(forceField, 5)
+					-- Add indicator above head
+					local indicator = Instance.new("BillboardGui")
+					indicator.Name = "GhostIndicator"
+					indicator.Size = UDim2.new(0, 60, 0, 20)
+					indicator.StudsOffset = Vector3.new(0, 3, 0)
+					indicator.AlwaysOnTop = true
+					indicator.Adornee = hrp
+					indicator.Parent = hrp
+
+					local label = Instance.new("TextLabel")
+					label.Size = UDim2.new(1, 0, 1, 0)
+					label.BackgroundTransparency = 1
+					label.Text = "GHOST"
+					label.TextColor3 = Color3.new(0.7, 0.7, 1)
+					label.TextStrokeTransparency = 0.3
+					label.Font = Enum.Font.GothamBold
+					label.TextScaled = true
+					label.Parent = indicator
+
+					-- Cleanup after duration
+					task.delay(5, function()
+						-- Remove cloak marker
+						if cloakedMarker and cloakedMarker.Parent then
+							cloakedMarker:Destroy()
+						end
+
+						-- Restore transparency
+						for part, originalTransparency in pairs(originalTransparencies) do
+							if part and part.Parent then
+								part.Transparency = originalTransparency
+							end
+						end
+
+						-- Remove effects
+						if ghostParticles and ghostParticles.Parent then
+							ghostParticles:Destroy()
+						end
+						if indicator and indicator.Parent then
+							indicator:Destroy()
+						end
+					end)
 				end
 			end
 		end,
@@ -270,21 +333,14 @@ end
 -- Find a valid spawn position
 local function findSpawnPosition()
 	local spawnLocations = getSpawnLocations()
-	local center = Vector3.new(0, 0, 0)
-
-	-- Calculate center from spawns if available
-	if #spawnLocations > 0 then
-		local total = Vector3.new(0, 0, 0)
-		for _, pos in ipairs(spawnLocations) do
-			total = total + pos
-		end
-		center = total / #spawnLocations
-	end
+	local mapInfo = getMapInfo()
+	local center = mapInfo.center
+	local spawnRadius = mapInfo.halfSize * SPAWN_RADIUS_PERCENT
 
 	-- Try to find a valid position
 	for attempt = 1, 20 do
 		local angle = math.random() * math.pi * 2
-		local distance = math.random() * SPAWN_RADIUS
+		local distance = math.random() * spawnRadius
 		local x = center.X + math.cos(angle) * distance
 		local z = center.Z + math.sin(angle) * distance
 		local position = Vector3.new(x, 5, z)
