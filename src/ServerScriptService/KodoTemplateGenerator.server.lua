@@ -38,6 +38,7 @@ local function createKodoTemplate()
 	rootPart.Transparency = 1  -- Invisible, just for physics
 	rootPart.CanCollide = true
 	rootPart.Anchored = false
+	rootPart.CFrame = CFrame.new(0, 10, 0)  -- Position BEFORE parenting
 	rootPart.Parent = kodo
 
 	-- Torso/Body - the visible main body
@@ -48,13 +49,17 @@ local function createKodoTemplate()
 	torso.Anchored = false
 	torso.Material = Enum.Material.SmoothPlastic
 	torso.Color = Color3.fromRGB(139, 90, 43)  -- Brown (will be overridden by type)
+	torso.CFrame = rootPart.CFrame  -- Same position as root
 	torso.Parent = kodo
 
-	-- Weld torso to root
-	local torsoWeld = Instance.new("WeldConstraint")
-	torsoWeld.Part0 = rootPart
-	torsoWeld.Part1 = torso
-	torsoWeld.Parent = torso
+	-- RootJoint Motor6D - REQUIRED for Humanoid:MoveTo() to work
+	local rootJoint = Instance.new("Motor6D")
+	rootJoint.Name = "RootJoint"
+	rootJoint.Part0 = rootPart
+	rootJoint.Part1 = torso
+	rootJoint.C0 = CFrame.new(0, 0, 0)
+	rootJoint.C1 = CFrame.new(0, 0, 0)
+	rootJoint.Parent = rootPart
 
 	-- Head
 	local head = Instance.new("Part")
@@ -64,14 +69,14 @@ local function createKodoTemplate()
 	head.Anchored = false
 	head.Material = Enum.Material.SmoothPlastic
 	head.Color = Color3.fromRGB(139, 90, 43)
+	head.CFrame = torso.CFrame * CFrame.new(0, 0.5, -4)  -- Position BEFORE weld
 	head.Parent = kodo
 
-	-- Position head in front
+	-- Weld head to torso
 	local headWeld = Instance.new("WeldConstraint")
 	headWeld.Part0 = torso
 	headWeld.Part1 = head
 	headWeld.Parent = head
-	head.CFrame = torso.CFrame * CFrame.new(0, 0.5, -4)  -- Front of body
 
 	-- Horns (optional visual flair)
 	local function createHorn(offset, angle)
@@ -82,13 +87,13 @@ local function createKodoTemplate()
 		horn.Anchored = false
 		horn.Material = Enum.Material.SmoothPlastic
 		horn.Color = Color3.fromRGB(200, 180, 150)  -- Bone color
+		horn.CFrame = head.CFrame * CFrame.new(offset, 1, -0.5) * CFrame.Angles(math.rad(angle), 0, 0)  -- Position BEFORE weld
 		horn.Parent = kodo
 
 		local hornWeld = Instance.new("WeldConstraint")
 		hornWeld.Part0 = head
 		hornWeld.Part1 = horn
 		hornWeld.Parent = horn
-		horn.CFrame = head.CFrame * CFrame.new(offset, 1, -0.5) * CFrame.Angles(math.rad(angle), 0, 0)
 
 		return horn
 	end
@@ -132,13 +137,13 @@ local function createKodoTemplate()
 	tail.Anchored = false
 	tail.Material = Enum.Material.SmoothPlastic
 	tail.Color = Color3.fromRGB(139, 90, 43)
+	tail.CFrame = torso.CFrame * CFrame.new(0, 0, 5)  -- Position BEFORE weld
 	tail.Parent = kodo
 
 	local tailWeld = Instance.new("WeldConstraint")
 	tailWeld.Part0 = torso
 	tailWeld.Part1 = tail
 	tailWeld.Parent = tail
-	tail.CFrame = torso.CFrame * CFrame.new(0, 0, 5)  -- Behind body
 
 	-- Set PrimaryPart
 	kodo.PrimaryPart = rootPart
@@ -153,13 +158,7 @@ local function createKodoTemplate()
 	humanoid.HipHeight = 2  -- Lift body off ground
 	humanoid.Parent = kodo
 
-	-- Position all parts relative to root
-	rootPart.CFrame = CFrame.new(0, 5, 0)
-	torso.CFrame = rootPart.CFrame
-	head.CFrame = torso.CFrame * CFrame.new(0, 0.5, -4)
-	tail.CFrame = torso.CFrame * CFrame.new(0, 0, 5)
-
-	-- Parent to storage
+	-- Parent to storage (parts already positioned)
 	kodo.Parent = kodoStorage
 
 	print("KodoTemplateGenerator: Created Kodo template")

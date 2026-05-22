@@ -305,9 +305,14 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth
 	for _, part in ipairs(kodo:GetDescendants()) do
 		if part:IsA("BasePart") then
 			part.Color = typeConfig.color
-			if sizeMult ~= 1.0 then
+			-- Scale size (but not HumanoidRootPart - keep hitbox consistent for pathfinding)
+			if sizeMult ~= 1.0 and part.Name ~= "HumanoidRootPart" then
 				part.Size = part.Size * sizeMult
 			end
+		end
+		-- Scale Motor6D offsets to match body scaling
+		if part:IsA("Motor6D") and sizeMult ~= 1.0 then
+			part.C0 = CFrame.new(part.C0.Position * sizeMult) * (part.C0 - part.C0.Position)
 		end
 	end
 
@@ -318,10 +323,18 @@ function KodoAI.spawnKodo(kodoTemplate, spawnPosition, customSpeed, customHealth
 		bossTag.Value = true
 		bossTag.Parent = kodo
 
+		local bossSizeMult = 1.5
 		for _, part in ipairs(kodo:GetDescendants()) do
 			if part:IsA("BasePart") then
-				part.Size = part.Size * 1.5
+				-- Scale size (but not HumanoidRootPart)
+				if part.Name ~= "HumanoidRootPart" then
+					part.Size = part.Size * bossSizeMult
+				end
 				part.Color = Color3.fromRGB(139, 0, 0)
+			end
+			-- Scale Motor6D offsets for boss
+			if part:IsA("Motor6D") then
+				part.C0 = CFrame.new(part.C0.Position * bossSizeMult) * (part.C0 - part.C0.Position)
 			end
 		end
 
