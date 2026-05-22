@@ -608,12 +608,12 @@ if not goldText then
 	warn("PlacementSystem: Could not find GoldText, gold checking may not work")
 end
 
--- Remote events
+-- Remote events (wait longer since BuildingManager creates these after loading templates)
 print("PlacementSystem: Waiting for PlaceItem event...")
-local placeItemEvent = ReplicatedStorage:WaitForChild("PlaceItem", 10)
+local placeItemEvent = ReplicatedStorage:WaitForChild("PlaceItem", 30)
 
 if not placeItemEvent then
-	warn("PlacementSystem: PlaceItem event not found after 10 seconds!")
+	warn("PlacementSystem: PlaceItem event not found after 30 seconds!")
 	return
 end
 
