@@ -746,6 +746,10 @@ function KodoAI.runAI(kodo)
 	local frustrationLevel = 0       -- Increases when stuck, decreases when moving
 	local FRUSTRATION_THRESHOLD = canFitThroughGaps and 10 or 3  -- Lower threshold = attack sooner
 
+	-- Failsafe: Force movement if idle too long (prevents spawn camping issues)
+	local FORCE_MOVE_TIME = 3.0  -- Force movement after 3 seconds of no progress
+	local lastForceMove = tick()
+
 	-- Spreading: Each kodo gets a random offset so they don't all target the same spot
 	local spreadOffset = Vector3.new(
 		(math.random() - 0.5) * SPREAD_RADIUS * 2,
@@ -804,6 +808,7 @@ function KodoAI.runAI(kodo)
 
 			if distanceMoved > 0.5 then
 				lastMoveTime = tick()
+				lastForceMove = tick()  -- Reset force move timer when actually moving
 				-- Moving well - reduce frustration slowly
 				frustrationLevel = math.max(0, frustrationLevel - 0.5)
 				pathfindAttempts = 0
@@ -814,6 +819,17 @@ function KodoAI.runAI(kodo)
 				end
 			end
 			lastPosition = rootPart.Position
+
+			-- FAILSAFE: If Kodo hasn't moved in FORCE_MOVE_TIME, reset everything and force direct movement
+			local forceMove = tick() - lastForceMove > FORCE_MOVE_TIME
+			if forceMove then
+				usingPathfinding = false
+				currentPath = nil
+				frustrationLevel = 0
+				pathfindAttempts = 0
+				lastForceMove = tick()
+				-- Will be handled below - just reset state so it tries fresh
+			end
 
 			if nearestPlayer and nearestPlayer.Character then
 				local targetRoot = nearestPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -838,21 +854,22 @@ function KodoAI.runAI(kodo)
 								end
 							end
 						else
+							-- No structure found but stuck - just move toward player
 							lastMoveTime = tick()
 							usingPathfinding = false
 							frustrationLevel = 0
+							humanoid:MoveTo(targetPos)
 						end
-					elseif isStuck then
-						-- Stuck but not frustrated enough - try to find new path
-						usingPathfinding = false
-						pathfindAttempts = pathfindAttempts + 1
 					else
-						-- Not stuck - try movement
-						if not usingPathfinding or tick() - pathCreatedTime > PATH_CACHE_TIME then
+						-- Not stuck enough to attack - ALWAYS try to move toward player
+						-- Reset pathfinding if stuck or path cache expired
+						if isStuck or not usingPathfinding or tick() - pathCreatedTime > PATH_CACHE_TIME then
+							usingPathfinding = false
+
 							local pathClear, blockingStructure = isPathClear(rootPart.Position, targetPos, {kodo, nearestPlayer.Character})
 
 							if pathClear then
-								usingPathfinding = false
+								-- Direct path clear - just move
 								humanoid:MoveTo(targetPos)
 							else
 								-- Try pathfinding with appropriate agent size
@@ -910,6 +927,10 @@ function KodoAI.runAI(kodo)
 							end
 						end
 					end
+				else
+					-- Player has no HumanoidRootPart - move toward their character position
+					local charPos = nearestPlayer.Character:GetPivot().Position
+					humanoid:MoveTo(charPos + spreadOffset)
 				end
 			else
 				-- No player - wander
