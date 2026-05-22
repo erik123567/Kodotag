@@ -1012,18 +1012,6 @@ local function setPreviewValid(preview, isValid)
 	end
 end
 
--- Items that are dynamically created on the server (use dynamic preview instead of model lookup)
-local DYNAMIC_ITEMS = {
-	Barricade = true,
-	Wall = true,
-	StrongWall = true,
-	SpeedAura = true,
-	DamageAura = true,
-	FortifyAura = true,
-	RangeAura = true,
-	RegenAura = true,
-}
-
 -- Helper: Create preview based on item type (uses actual model if available)
 local function createPreview(itemData)
 	if previewModel then
@@ -1034,55 +1022,39 @@ local function createPreview(itemData)
 	local usedActualModel = false
 	local usedDynamicPreview = false
 
-	-- For dynamic items, create accurate preview (matches server template)
-	if DYNAMIC_ITEMS[itemData.name] then
-		preview = createDynamicPreview(itemData)
-		usedDynamicPreview = true
+	-- Try to use actual model from ReplicatedStorage (created by BuildingTemplateGenerator)
+	local actualModel = findBuildableModel(itemData.name)
+	if actualModel then
+		preview = actualModel:Clone()
+		preview.Name = "PreviewModel"
+		usedActualModel = true
 
-		-- Apply transparency to all parts
+		-- Make all parts semi-transparent and non-collidable
 		for _, part in ipairs(preview:GetDescendants()) do
 			if part:IsA("BasePart") then
+				part.Anchored = true
+				part.CanCollide = false
 				part.Transparency = math.max(part.Transparency, 0.3)
 				part.CastShadow = false
+			elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") then
+				part:Destroy()
 			end
 		end
-		if preview.PrimaryPart then
-			preview.PrimaryPart.Transparency = math.max(preview.PrimaryPart.Transparency, 0.3)
+
+		-- Also handle if model is a single BasePart
+		if preview:IsA("BasePart") then
+			preview.Anchored = true
+			preview.CanCollide = false
+			preview.Transparency = math.max(preview.Transparency, 0.3)
 		end
-	else
-		-- Try to use actual model from ReplicatedStorage
-		local actualModel = findBuildableModel(itemData.name)
-		if actualModel then
-			preview = actualModel:Clone()
-			preview.Name = "PreviewModel"
-			usedActualModel = true
 
-			-- Make all parts semi-transparent and non-collidable
-			for _, part in ipairs(preview:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.Anchored = true
-					part.CanCollide = false
-					part.Transparency = math.max(part.Transparency, 0.3)
-					part.CastShadow = false
-				elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") then
-					part:Destroy()
-				end
-			end
-
-			-- Also handle if model is a single BasePart
-			if preview:IsA("BasePart") then
-				preview.Anchored = true
-				preview.CanCollide = false
-				preview.Transparency = math.max(preview.Transparency, 0.3)
-			end
-
-			-- Ensure PrimaryPart is set
-			if preview:IsA("Model") and not preview.PrimaryPart then
-				local primaryPart = preview:FindFirstChild("HumanoidRootPart")
-					or preview:FindFirstChildWhichIsA("BasePart")
-				if primaryPart then
-					preview.PrimaryPart = primaryPart
-				end
+		-- Ensure PrimaryPart is set
+		if preview:IsA("Model") and not preview.PrimaryPart then
+			local primaryPart = preview:FindFirstChild("Base")
+				or preview:FindFirstChild("HumanoidRootPart")
+				or preview:FindFirstChildWhichIsA("BasePart")
+			if primaryPart then
+				preview.PrimaryPart = primaryPart
 			end
 		end
 	end

@@ -63,11 +63,20 @@ local function playerHasWorkshop(playerName)
 	return false
 end
 
--- References
-local buildableItems = ServerStorage:FindFirstChild("BuildableItems")
+-- Wait for BuildingTemplateGenerator to create templates
+print("BuildingManager: Waiting for building templates...")
+local buildableItems = ServerStorage:WaitForChild("BuildableItems", 15)
 if not buildableItems then
-	warn("BuildableItems folder not found in ServerStorage!")
+	warn("BuildingManager: BuildableItems folder not found in ServerStorage!")
 	return
+end
+
+-- Wait for at least one turret to be created (confirms templates are ready)
+local turretsFolder = buildableItems:WaitForChild("Turrets", 10)
+if turretsFolder then
+	turretsFolder:WaitForChild("Turret", 10)
+end
+print("BuildingManager: Building templates ready!")
 end
 
 print("BuildingManager: Found BuildableItems folder")
