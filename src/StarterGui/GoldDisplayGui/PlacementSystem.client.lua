@@ -15,7 +15,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
-print("PlacementSystem: Starting...")
+print("PlacementSystem: Starting on game server...")
 
 -- Settings
 local GRID_SIZE = 5
@@ -387,7 +387,13 @@ local placementRangeIndicator = nil -- Shows build radius around player
 local lastValidPosition = nil -- Track last valid placement position
 
 -- UI References
-local goldDisplayGui = playerGui:WaitForChild("GoldDisplayGui")
+print("PlacementSystem: Waiting for GoldDisplayGui...")
+local goldDisplayGui = playerGui:WaitForChild("GoldDisplayGui", 10)
+if not goldDisplayGui then
+	warn("PlacementSystem: GoldDisplayGui not found!")
+	return
+end
+print("PlacementSystem: GoldDisplayGui found")
 
 -- Category definitions for tabs
 local CATEGORIES = {
@@ -422,6 +428,7 @@ buildMenu.BackgroundTransparency = 0.05
 buildMenu.BorderSizePixel = 0
 buildMenu.Visible = false
 buildMenu.Parent = goldDisplayGui
+print("PlacementSystem: BuildMenu UI created")
 
 local menuCorner = Instance.new("UICorner")
 menuCorner.CornerRadius = UDim.new(0, 8)
