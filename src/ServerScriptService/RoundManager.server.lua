@@ -142,7 +142,7 @@ end
 local gameArea = nil
 local spawnLocations = nil
 local kodoSpawns = nil
-local kodoTemplate = game.ServerStorage:FindFirstChild("KodoStorage") and game.ServerStorage.KodoStorage:FindFirstChild("Kodo")
+local kodoTemplate = nil  -- Will be fetched after KodoTemplateGenerator runs
 
 -- Function to acquire map references (called after MapGenerator runs)
 local function acquireMapReferences()
@@ -175,7 +175,16 @@ local function acquireMapReferences()
 		warn("RoundManager: GameArea not found!")
 	end
 
-	if not kodoTemplate then
+	-- Wait for KodoTemplateGenerator to create the template
+	print("RoundManager: Waiting for Kodo template...")
+	local kodoStorage = game.ServerStorage:WaitForChild("KodoStorage", 10)
+	if kodoStorage then
+		kodoTemplate = kodoStorage:WaitForChild("Kodo", 10)
+	end
+
+	if kodoTemplate then
+		print("RoundManager: Kodo template found!")
+	else
 		warn("RoundManager: Kodo template not found in ServerStorage!")
 	end
 
