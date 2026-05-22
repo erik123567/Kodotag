@@ -77,9 +77,6 @@ if turretsFolder then
 	turretsFolder:WaitForChild("Turret", 10)
 end
 print("BuildingManager: Building templates ready!")
-end
-
-print("BuildingManager: Found BuildableItems folder")
 
 -- Create remote events
 local placeItemEvent = ReplicatedStorage:FindFirstChild("PlaceItem")
