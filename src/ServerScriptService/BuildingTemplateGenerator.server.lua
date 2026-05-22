@@ -58,66 +58,72 @@ end
 -- TURRET TEMPLATES
 --==========================================
 
+-- STANDARDIZED: All turrets use 4x2x4 base for consistent gameplay
+-- Visual differences come from colors, barrel styles, and effects
+local STANDARD_BASE_SIZE = Vector3.new(4, 2, 4)
+local STANDARD_HEAD_SCALE = 0.7  -- Head is 70% of base size
+local STANDARD_BARREL_SIZE = Vector3.new(1, 1, 3.5)
+
 local TURRET_CONFIGS = {
 	Turret = {
 		displayName = "Basic Turret",
 		cost = 50,
 		baseColor = Color3.fromRGB(100, 100, 100),
 		barrelColor = Color3.fromRGB(60, 60, 60),
-		baseSize = Vector3.new(4, 2, 4),
-		barrelSize = Vector3.new(1, 1, 4),
+		baseSize = STANDARD_BASE_SIZE,
+		barrelSize = STANDARD_BARREL_SIZE,
 	},
 	FastTurret = {
 		displayName = "Fast Turret",
 		cost = 75,
 		baseColor = Color3.fromRGB(200, 200, 100),
 		barrelColor = Color3.fromRGB(150, 150, 50),
-		baseSize = Vector3.new(3, 2, 3),
+		baseSize = STANDARD_BASE_SIZE,
 		barrelSize = Vector3.new(0.6, 0.6, 3),
-		dualBarrel = true,
+		dualBarrel = true,  -- Visual distinction: two thin barrels
 	},
 	SlowTurret = {
 		displayName = "Heavy Turret",
 		cost = 30,
 		baseColor = Color3.fromRGB(80, 80, 80),
 		barrelColor = Color3.fromRGB(40, 40, 40),
-		baseSize = Vector3.new(5, 3, 5),
-		barrelSize = Vector3.new(1.5, 1.5, 5),
+		baseSize = STANDARD_BASE_SIZE,
+		barrelSize = Vector3.new(1.5, 1.5, 4),  -- Thicker barrel for visual distinction
 	},
 	FrostTurret = {
 		displayName = "Frost Turret",
 		cost = 100,
 		baseColor = Color3.fromRGB(150, 200, 255),
 		barrelColor = Color3.fromRGB(100, 180, 255),
-		baseSize = Vector3.new(4, 2, 4),
-		barrelSize = Vector3.new(1.2, 1.2, 4),
-		glowColor = Color3.fromRGB(150, 220, 255),
+		baseSize = STANDARD_BASE_SIZE,
+		barrelSize = STANDARD_BARREL_SIZE,
+		glowColor = Color3.fromRGB(150, 220, 255),  -- Blue glow for visual distinction
 	},
 	PoisonTurret = {
 		displayName = "Poison Turret",
 		cost = 90,
 		baseColor = Color3.fromRGB(80, 150, 80),
 		barrelColor = Color3.fromRGB(50, 200, 50),
-		baseSize = Vector3.new(4, 2, 4),
-		barrelSize = Vector3.new(1, 1, 3.5),
-		glowColor = Color3.fromRGB(100, 255, 100),
+		baseSize = STANDARD_BASE_SIZE,
+		barrelSize = STANDARD_BARREL_SIZE,
+		glowColor = Color3.fromRGB(100, 255, 100),  -- Green glow for visual distinction
 	},
 	MultiShotTurret = {
 		displayName = "Multi-Shot Turret",
 		cost = 120,
 		baseColor = Color3.fromRGB(150, 100, 50),
 		barrelColor = Color3.fromRGB(100, 70, 30),
-		baseSize = Vector3.new(5, 2, 5),
-		barrelSize = Vector3.new(0.8, 0.8, 3),
-		tripleBarrel = true,
+		baseSize = STANDARD_BASE_SIZE,
+		barrelSize = Vector3.new(0.7, 0.7, 3),
+		tripleBarrel = true,  -- Visual distinction: three barrels
 	},
 	CannonTurret = {
 		displayName = "Cannon Turret",
 		cost = 150,
 		baseColor = Color3.fromRGB(60, 60, 70),
 		barrelColor = Color3.fromRGB(40, 40, 50),
-		baseSize = Vector3.new(6, 3, 6),
-		barrelSize = Vector3.new(2, 2, 4),
+		baseSize = STANDARD_BASE_SIZE,
+		barrelSize = Vector3.new(1.8, 1.8, 3.5),  -- Fat barrel for visual distinction
 	},
 }
 
@@ -125,22 +131,39 @@ local function createTurret(name, config)
 	local turret = Instance.new("Model")
 	turret.Name = name
 
-	-- Base platform
+	-- Use an invisible anchor part at ground level as PrimaryPart
+	-- This ensures consistent placement - the anchor's center is at Y=0
+	local anchor = Instance.new("Part")
+	anchor.Name = "Anchor"
+	anchor.Size = Vector3.new(config.baseSize.X, 0.1, config.baseSize.Z)
+	anchor.CFrame = CFrame.new(0, 0.05, 0)  -- Tiny part at ground level
+	anchor.Transparency = 1
+	anchor.CanCollide = false
+	anchor.Anchored = true
+	anchor.Parent = turret
+
+	-- Base platform - sits on ground
 	local base = Instance.new("Part")
 	base.Name = "Base"
 	base.Size = config.baseSize
-	base.CFrame = CFrame.new(0, config.baseSize.Y / 2, 0)
+	base.CFrame = CFrame.new(0, config.baseSize.Y / 2, 0)  -- Bottom at Y=0
 	base.Color = config.baseColor
 	base.Material = Enum.Material.Metal
 	base.Anchored = true
 	base.CanCollide = true
 	base.Parent = turret
 
+	local baseWeld = Instance.new("WeldConstraint")
+	baseWeld.Part0 = anchor
+	baseWeld.Part1 = base
+	baseWeld.Parent = base
+
 	-- Turret head (rotates)
+	local headHeight = config.baseSize.Y * 0.5
 	local head = Instance.new("Part")
 	head.Name = "Head"
-	head.Size = Vector3.new(config.baseSize.X * 0.7, config.baseSize.Y * 0.6, config.baseSize.Z * 0.7)
-	head.CFrame = CFrame.new(0, config.baseSize.Y + head.Size.Y / 2, 0)
+	head.Size = Vector3.new(config.baseSize.X * STANDARD_HEAD_SCALE, headHeight, config.baseSize.Z * STANDARD_HEAD_SCALE)
+	head.CFrame = CFrame.new(0, config.baseSize.Y + headHeight / 2, 0)
 	head.Color = config.baseColor
 	head.Material = Enum.Material.Metal
 	head.Anchored = true
@@ -157,7 +180,7 @@ local function createTurret(name, config)
 		local barrel = Instance.new("Part")
 		barrel.Name = "Barrel"
 		barrel.Size = config.barrelSize
-		barrel.CFrame = CFrame.new(xOffset, config.baseSize.Y + head.Size.Y / 2, -config.barrelSize.Z / 2 - head.Size.Z / 4)
+		barrel.CFrame = CFrame.new(xOffset, config.baseSize.Y + headHeight / 2, -config.barrelSize.Z / 2 - head.Size.Z / 4)
 		barrel.Color = config.barrelColor
 		barrel.Material = Enum.Material.Metal
 		barrel.Anchored = true
@@ -177,8 +200,8 @@ local function createTurret(name, config)
 		createBarrel(0)
 		createBarrel(1)
 	elseif config.dualBarrel then
-		createBarrel(-0.5)
-		createBarrel(0.5)
+		createBarrel(-0.6)
+		createBarrel(0.6)
 	else
 		createBarrel(0)
 	end
@@ -192,7 +215,8 @@ local function createTurret(name, config)
 		glow.Parent = head
 	end
 
-	turret.PrimaryPart = base
+	-- PrimaryPart is the anchor at ground level for consistent placement
+	turret.PrimaryPart = anchor
 	addCost(turret, config.cost)
 	addDisplayName(turret, config.displayName)
 
