@@ -644,21 +644,80 @@ function KodoAI.runAI(kodo)
 
 	local lastAnimPos = rootPart.Position
 
-	-- Facing animation loop (no bobbing - let physics handle movement)
+	-- Find leg motors for animation
+	local torso = kodo:FindFirstChild("Torso")
+	local legMotors = {}
+	if torso then
+		legMotors.leftFront = torso:FindFirstChild("LeftFrontLegMotor")
+		legMotors.rightFront = torso:FindFirstChild("RightFrontLegMotor")
+		legMotors.leftBack = torso:FindFirstChild("LeftBackLegMotor")
+		legMotors.rightBack = torso:FindFirstChild("RightBackLegMotor")
+	end
+
+	-- Store original motor positions
+	local originalC0 = {}
+	for name, motor in pairs(legMotors) do
+		if motor then
+			originalC0[name] = motor.C0
+		end
+	end
+
+	-- Animation state
+	local animPhase = 0
+	local ANIM_SPEED = 12  -- Leg cycle speed
+	local LEG_SWING = 0.4  -- Forward/back swing amount (radians)
+	local LEG_LIFT = 0.2   -- Up/down lift amount (radians)
+
+	-- Facing and leg animation loop
 	task.spawn(function()
 		while kodo and kodo.Parent and humanoid.Health > 0 do
 			local currentPos = rootPart.Position
 			local movement = (currentPos - lastAnimPos)
 			local moveDir = Vector3.new(movement.X, 0, movement.Z)
+			local isMoving = moveDir.Magnitude > 0.3
+			local speed = humanoid.WalkSpeed / 16  -- Normalize to base speed
 
-			if moveDir.Magnitude > 0.3 then
+			if isMoving then
 				-- Face movement direction using BodyGyro (smooth, doesn't conflict)
 				local targetCFrame = CFrame.new(rootPart.Position, rootPart.Position + moveDir)
 				bodyGyro.CFrame = targetCFrame
+
+				-- Advance animation phase based on speed
+				animPhase = animPhase + (ANIM_SPEED * speed * 0.1)
+
+				-- Animate legs in trot pattern (diagonal pairs move together)
+				-- Left front + Right back, then Right front + Left back
+				local swing1 = math.sin(animPhase) * LEG_SWING
+				local swing2 = math.sin(animPhase + math.pi) * LEG_SWING  -- Opposite phase
+				local lift1 = math.abs(math.sin(animPhase)) * LEG_LIFT
+				local lift2 = math.abs(math.sin(animPhase + math.pi)) * LEG_LIFT
+
+				-- Apply animation to motors
+				if legMotors.leftFront and originalC0.leftFront then
+					legMotors.leftFront.C0 = originalC0.leftFront * CFrame.Angles(swing1, 0, 0)
+				end
+				if legMotors.rightBack and originalC0.rightBack then
+					legMotors.rightBack.C0 = originalC0.rightBack * CFrame.Angles(swing1, 0, 0)
+				end
+				if legMotors.rightFront and originalC0.rightFront then
+					legMotors.rightFront.C0 = originalC0.rightFront * CFrame.Angles(swing2, 0, 0)
+				end
+				if legMotors.leftBack and originalC0.leftBack then
+					legMotors.leftBack.C0 = originalC0.leftBack * CFrame.Angles(swing2, 0, 0)
+				end
+			else
+				-- Not moving - smoothly return legs to neutral
+				for name, motor in pairs(legMotors) do
+					if motor and originalC0[name] then
+						-- Lerp back to original position
+						local current = motor.C0
+						motor.C0 = current:Lerp(originalC0[name], 0.2)
+					end
+				end
 			end
 
 			lastAnimPos = currentPos
-			task.wait(0.1)
+			task.wait(0.05)  -- Faster updates for smoother animation
 		end
 
 		-- Cleanup
