@@ -74,25 +74,25 @@ local function getModelBoundingBox(model)
 end
 
 -- Fallback sizes if model not found in ReplicatedStorage
--- These should match actual models in BuildingTemplateGenerator
--- ALL TURRETS ARE NOW STANDARDIZED TO 4x4x4 footprint (4x2x4 base + head)
+-- These match the actual models in BuildingTemplateGenerator
+-- TURRETS (5 studs tall) are TALLER than WALLS (4 studs) so they shoot over
 local FALLBACK_SIZES = {
-	-- Turrets (standardized 4x4x4 footprint)
-	Turret = Vector3.new(4, 4, 4),
-	FastTurret = Vector3.new(4, 4, 4),
-	SlowTurret = Vector3.new(4, 4, 4),
-	FrostTurret = Vector3.new(4, 4, 4),
-	PoisonTurret = Vector3.new(4, 4, 4),
-	MultiShotTurret = Vector3.new(4, 4, 4),
-	CannonTurret = Vector3.new(4, 4, 4),
-	-- Defense (dynamic templates)
-	Barricade = Vector3.new(4.5, 9, 4.5),    -- Maze pillar
-	Wall = Vector3.new(10, 8, 2),            -- Wide barrier
-	StrongWall = Vector3.new(12, 10, 3),     -- Extra fortified wall
+	-- Turrets: 4x5x4 (base 3 + head 2)
+	Turret = Vector3.new(4, 5, 4),
+	FastTurret = Vector3.new(4, 5, 4),
+	SlowTurret = Vector3.new(4, 5, 4),
+	FrostTurret = Vector3.new(4, 5, 4),
+	PoisonTurret = Vector3.new(4, 5, 4),
+	MultiShotTurret = Vector3.new(4, 5, 4),
+	CannonTurret = Vector3.new(4, 5, 4),
+	-- Defense: SHORT walls (4 studs) so turrets shoot over
+	Barricade = Vector3.new(4, 4, 4),        -- Short maze cube
+	Wall = Vector3.new(10, 4, 2),            -- Low wide wall
+	StrongWall = Vector3.new(10, 4.5, 4.5),  -- Bunker wall
 	-- Economy
 	Farm = Vector3.new(8, 4, 10),
 	Workshop = Vector3.new(10, 8, 10),
-	-- Auras (dynamic templates - 4x9x4 total with crystal)
+	-- Auras (6+3=9 studs tall with crystal)
 	SpeedAura = Vector3.new(4, 9, 4),
 	DamageAura = Vector3.new(4, 9, 4),
 	FortifyAura = Vector3.new(4, 9, 4),
@@ -101,14 +101,14 @@ local FALLBACK_SIZES = {
 }
 
 -- Hardcoded buildable items with stats
--- ALL TURRETS NOW USE STANDARDIZED 4x4x4 SIZE for consistent gameplay
+-- TURRETS (5 studs) are TALLER than WALLS (4 studs) so turrets shoot over walls
 local BUILDABLE_ITEMS = {
 	{
 		name = "Turret",
 		displayName = "Basic Turret",
 		cost = 50,
 		buildTime = 3,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),  -- 5 studs tall (taller than walls)
 		category = "Turrets",
 		stats = {
 			damage = 50,
@@ -123,7 +123,7 @@ local BUILDABLE_ITEMS = {
 		displayName = "Fast Turret",
 		cost = 75,
 		buildTime = 4,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),
 		category = "Turrets",
 		stats = {
 			damage = 40,
@@ -138,7 +138,7 @@ local BUILDABLE_ITEMS = {
 		displayName = "Slow Turret",
 		cost = 30,
 		buildTime = 2,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),
 		category = "Turrets",
 		stats = {
 			damage = 60,
@@ -153,7 +153,7 @@ local BUILDABLE_ITEMS = {
 		displayName = "Frost Turret",
 		cost = 100,
 		buildTime = 5,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),
 		category = "Turrets",
 		stats = {
 			damage = 20,
@@ -168,7 +168,7 @@ local BUILDABLE_ITEMS = {
 		displayName = "Poison Turret",
 		cost = 90,
 		buildTime = 5,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),
 		category = "Turrets",
 		stats = {
 			damage = 15,
@@ -183,7 +183,7 @@ local BUILDABLE_ITEMS = {
 		displayName = "Multi-Shot Turret",
 		cost = 120,
 		buildTime = 6,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),
 		category = "Turrets",
 		stats = {
 			damage = "25x3",
@@ -198,7 +198,7 @@ local BUILDABLE_ITEMS = {
 		displayName = "Cannon Turret",
 		cost = 150,
 		buildTime = 8,
-		size = Vector3.new(4, 4, 4),  -- Standardized
+		size = Vector3.new(4, 5, 4),
 		category = "Turrets",
 		stats = {
 			damage = 80,
@@ -213,11 +213,11 @@ local BUILDABLE_ITEMS = {
 		displayName = "Barricade",
 		cost = 15,
 		buildTime = 1,
-		size = Vector3.new(4.5, 9, 4.5),
+		size = Vector3.new(4, 4, 4),  -- Short cube (4 studs) - turrets shoot over
 		category = "Maze",
 		stats = {
 			health = 100,
-			description = "Large maze pillar. Build mazes to funnel Kodos into turret fire!"
+			description = "Short maze block. Build mazes to funnel Kodos - turrets shoot over these!"
 		}
 	},
 	{
@@ -225,23 +225,23 @@ local BUILDABLE_ITEMS = {
 		displayName = "Reinforced Wall",
 		cost = 60,
 		buildTime = 4,
-		size = Vector3.new(10, 8, 2),
+		size = Vector3.new(10, 4, 2),  -- Low wall (4 studs) - turrets shoot over
 		category = "Defense",
 		stats = {
 			health = 500,
-			description = "Heavy defensive wall for protecting your base. Place behind turrets to create strongholds."
+			description = "Low defensive wall. Turrets placed behind will shoot over it."
 		}
 	},
 	{
 		name = "StrongWall",
-		displayName = "Strong Wall",
+		displayName = "Bunker Wall",
 		cost = 120,
 		buildTime = 5,
-		size = Vector3.new(12, 10, 3),  -- Will be overridden by actual model size
+		size = Vector3.new(10, 4.5, 4.5),  -- Thick bunker wall
 		category = "Defense",
 		stats = {
 			health = 1000,
-			description = "Extra fortified wall. Extremely durable for holding critical chokepoints."
+			description = "Thick bunker fortification. Extra durable for critical chokepoints."
 		}
 	},
 	{
@@ -918,6 +918,11 @@ local TURRET_COLORS = {
 	CannonTurret = { base = Color3.fromRGB(60, 60, 70), barrel = Color3.fromRGB(40, 40, 50) },
 }
 
+-- Turret dimensions (matches BuildingTemplateGenerator)
+local TURRET_BASE_HEIGHT = 3
+local TURRET_HEAD_HEIGHT = 2
+local TURRET_TOTAL_HEIGHT = TURRET_BASE_HEIGHT + TURRET_HEAD_HEIGHT  -- 5 studs
+
 -- Helper: Create accurate dynamic preview (matches BuildingTemplateGenerator)
 local function createDynamicPreview(itemData)
 	local itemName = itemData.name
@@ -928,44 +933,37 @@ local function createDynamicPreview(itemData)
 	local turretColors = TURRET_COLORS[itemName]
 	if turretColors then
 		-- Create turret preview matching BuildingTemplateGenerator structure
-		-- Anchor at ground level for consistent placement
-		local anchor = Instance.new("Part")
-		anchor.Name = "Anchor"
-		anchor.Size = Vector3.new(4, 0.1, 4)
-		anchor.CFrame = CFrame.new(0, 0.05, 0)
-		anchor.Transparency = 1
-		anchor.CanCollide = false
-		anchor.Anchored = true
-		anchor.Parent = preview
-
-		-- Base: 4x2x4
+		-- Base: 4x3x4 (center at Y=1.5, bottom at Y=0)
 		local base = Instance.new("Part")
 		base.Name = "Base"
-		base.Size = Vector3.new(4, 2, 4)
-		base.CFrame = CFrame.new(0, 1, 0)  -- Bottom at Y=0
+		base.Size = Vector3.new(4, TURRET_BASE_HEIGHT, 4)
+		base.CFrame = CFrame.new(0, TURRET_BASE_HEIGHT / 2, 0)
 		base.Color = turretColors.base
 		base.Material = Enum.Material.Metal
 		base.Anchored = true
 		base.CanCollide = false
 		base.Parent = preview
 
-		-- Head: 2.8x1x2.8 (70% of base)
+		-- Head: 2.8x2x2.8 on top of base
 		local head = Instance.new("Part")
 		head.Name = "Head"
-		head.Size = Vector3.new(2.8, 1, 2.8)
-		head.CFrame = CFrame.new(0, 2.5, 0)  -- On top of base
+		head.Size = Vector3.new(2.8, TURRET_HEAD_HEIGHT, 2.8)
+		head.CFrame = CFrame.new(0, TURRET_BASE_HEIGHT + TURRET_HEAD_HEIGHT / 2, 0)
 		head.Color = turretColors.base
 		head.Material = Enum.Material.Metal
 		head.Anchored = true
 		head.CanCollide = false
 		head.Parent = preview
 
+		-- Barrel Y position (at head center height)
+		local barrelY = TURRET_BASE_HEIGHT + TURRET_HEAD_HEIGHT / 2
+
 		-- Barrel(s) based on turret type
 		local function createBarrel(xOffset, barrelSize)
 			local barrel = Instance.new("Part")
 			barrel.Name = "Barrel"
 			barrel.Size = barrelSize or Vector3.new(1, 1, 3.5)
-			barrel.CFrame = CFrame.new(xOffset, 2.5, -barrel.Size.Z / 2 - 0.7)
+			barrel.CFrame = CFrame.new(xOffset, barrelY, -barrel.Size.Z / 2 - 0.7)
 			barrel.Color = turretColors.barrel
 			barrel.Material = Enum.Material.Metal
 			barrel.Anchored = true
@@ -988,15 +986,15 @@ local function createDynamicPreview(itemData)
 			createBarrel(0)  -- Standard single barrel
 		end
 
-		preview.PrimaryPart = anchor
+		preview.PrimaryPart = base
 		return preview
 	end
 
 	if itemName == "Barricade" then
-		-- Barricade: 4.5x9x4.5 wood pillar
+		-- Short maze cube: 4x4x4
 		local pillar = Instance.new("Part")
 		pillar.Name = "Base"
-		pillar.Size = Vector3.new(4.5, 9, 4.5)
+		pillar.Size = Vector3.new(4, 4, 4)
 		pillar.Material = Enum.Material.Wood
 		pillar.BrickColor = BrickColor.new("Brown")
 		pillar.Anchored = true
@@ -1005,10 +1003,10 @@ local function createDynamicPreview(itemData)
 		preview.PrimaryPart = pillar
 
 	elseif itemName == "Wall" then
-		-- Wall: 10x8x2 concrete barrier
+		-- Low wall: 10x4x2
 		local wall = Instance.new("Part")
 		wall.Name = "Base"
-		wall.Size = Vector3.new(10, 8, 2)
+		wall.Size = Vector3.new(10, 4, 2)
 		wall.Material = Enum.Material.Concrete
 		wall.BrickColor = BrickColor.new("Medium stone grey")
 		wall.Anchored = true
@@ -1017,16 +1015,27 @@ local function createDynamicPreview(itemData)
 		preview.PrimaryPart = wall
 
 	elseif itemName == "StrongWall" then
-		-- StrongWall: 12x10x3 reinforced concrete
-		local wall = Instance.new("Part")
-		wall.Name = "Base"
-		wall.Size = Vector3.new(12, 10, 3)
-		wall.Material = Enum.Material.Concrete
-		wall.BrickColor = BrickColor.new("Dark stone grey")
-		wall.Anchored = true
-		wall.CanCollide = false
-		wall.Parent = preview
-		preview.PrimaryPart = wall
+		-- Bunker wall: thick base with top plate
+		local base = Instance.new("Part")
+		base.Name = "Base"
+		base.Size = Vector3.new(10, 3, 4)
+		base.Material = Enum.Material.Concrete
+		base.BrickColor = BrickColor.new("Dark stone grey")
+		base.Anchored = true
+		base.CanCollide = false
+		base.Parent = preview
+
+		local topPlate = Instance.new("Part")
+		topPlate.Name = "TopPlate"
+		topPlate.Size = Vector3.new(10, 1.5, 4.5)
+		topPlate.CFrame = CFrame.new(0, 2.25, 0)  -- Relative to base center
+		topPlate.Material = Enum.Material.DiamondPlate
+		topPlate.Color = Color3.fromRGB(70, 70, 80)
+		topPlate.Anchored = true
+		topPlate.CanCollide = false
+		topPlate.Parent = preview
+
+		preview.PrimaryPart = base
 
 	elseif itemName:find("Aura") then
 		-- Aura: Base pillar (4x6x4) + Crystal on top (2x3x2)
@@ -1100,9 +1109,6 @@ local function setPreviewValid(preview, isValid)
 	end
 end
 
--- Track if current preview uses ground-level anchor (affects Y positioning)
-local previewUsesGroundAnchor = false
-
 -- Helper: Create preview based on item type (uses actual model if available)
 local function createPreview(itemData)
 	if previewModel then
@@ -1112,7 +1118,6 @@ local function createPreview(itemData)
 	local preview = nil
 	local usedActualModel = false
 	local usedDynamicPreview = false
-	previewUsesGroundAnchor = false
 
 	-- Try to use actual model from ReplicatedStorage (created by BuildingTemplateGenerator)
 	local actualModel = findBuildableModel(itemData.name)
@@ -1140,19 +1145,13 @@ local function createPreview(itemData)
 			preview.Transparency = math.max(preview.Transparency, 0.3)
 		end
 
-		-- Ensure PrimaryPart is set - prefer Anchor for ground-level placement
-		if preview:IsA("Model") then
-			local anchor = preview:FindFirstChild("Anchor")
-			if anchor and anchor:IsA("BasePart") then
-				preview.PrimaryPart = anchor
-				previewUsesGroundAnchor = true
-			elseif not preview.PrimaryPart then
-				local primaryPart = preview:FindFirstChild("Base")
-					or preview:FindFirstChild("HumanoidRootPart")
-					or preview:FindFirstChildWhichIsA("BasePart")
-				if primaryPart then
-					preview.PrimaryPart = primaryPart
-				end
+		-- Ensure PrimaryPart is set
+		if preview:IsA("Model") and not preview.PrimaryPart then
+			local primaryPart = preview:FindFirstChild("Base")
+				or preview:FindFirstChild("HumanoidRootPart")
+				or preview:FindFirstChildWhichIsA("BasePart")
+			if primaryPart then
+				preview.PrimaryPart = primaryPart
 			end
 		end
 	end
@@ -1163,10 +1162,6 @@ local function createPreview(itemData)
 		preview = createDynamicPreview(itemData)
 		usedActualModel = false
 		usedDynamicPreview = true
-		-- Check if dynamic preview uses ground anchor (turrets do)
-		if preview:FindFirstChild("Anchor") then
-			previewUsesGroundAnchor = true
-		end
 		print("PlacementSystem: Using dynamic preview for", itemData.displayName)
 	end
 
@@ -1201,9 +1196,9 @@ local function createPreview(itemData)
 	previewModel = preview
 
 	if usedActualModel then
-		print("PlacementSystem: Created preview from actual model for", itemData.displayName, "(ground anchor:", previewUsesGroundAnchor, ")")
+		print("PlacementSystem: Created preview from actual model for", itemData.displayName)
 	elseif usedDynamicPreview then
-		print("PlacementSystem: Created dynamic preview for", itemData.displayName, "(ground anchor:", previewUsesGroundAnchor, ")")
+		print("PlacementSystem: Created dynamic preview for", itemData.displayName)
 	else
 		print("PlacementSystem: Created preview for", itemData.displayName)
 	end
@@ -1314,13 +1309,8 @@ local function updatePreview()
 			and character.HumanoidRootPart.Position
 			or Vector3.new(0, 0, 0)
 
-		-- Calculate Y offset based on model type:
-		-- - Ground anchor models (turrets): place at ground level
-		-- - Center-based models (walls, barricades): offset by half height
-		local yOffset = 0
-		if not previewUsesGroundAnchor then
-			yOffset = selectedItem.size.Y / 2
-		end
+		-- All models have PrimaryPart at center, so offset by half height to place on ground
+		local yOffset = selectedItem.size.Y / 2
 
 		-- Snap the hit position to grid first
 		local snappedPosition = snapToGrid(Vector3.new(
@@ -1656,7 +1646,6 @@ exitPlacementMode = function()
 	selectedItem = nil
 	currentRotation = 0
 	lastValidPosition = nil -- Reset last valid position
-	previewUsesGroundAnchor = false -- Reset ground anchor flag
 	print("PlacementSystem: Exited placement mode")
 end
 

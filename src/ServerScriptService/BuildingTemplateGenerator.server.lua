@@ -58,10 +58,10 @@ end
 -- TURRET TEMPLATES
 --==========================================
 
--- STANDARDIZED: All turrets use 4x2x4 base for consistent gameplay
--- Visual differences come from colors, barrel styles, and effects
-local STANDARD_BASE_SIZE = Vector3.new(4, 2, 4)
-local STANDARD_HEAD_SCALE = 0.7  -- Head is 70% of base size
+-- TURRETS ARE TALL (5-6 studs) so they shoot OVER walls/barricades (4 studs)
+-- All turrets use same footprint for consistent gameplay
+local TURRET_BASE_SIZE = Vector3.new(4, 3, 4)  -- Taller base (3 studs)
+local TURRET_HEAD_HEIGHT = 2  -- Head is 2 studs tall
 local STANDARD_BARREL_SIZE = Vector3.new(1, 1, 3.5)
 
 local TURRET_CONFIGS = {
@@ -70,7 +70,6 @@ local TURRET_CONFIGS = {
 		cost = 50,
 		baseColor = Color3.fromRGB(100, 100, 100),
 		barrelColor = Color3.fromRGB(60, 60, 60),
-		baseSize = STANDARD_BASE_SIZE,
 		barrelSize = STANDARD_BARREL_SIZE,
 	},
 	FastTurret = {
@@ -78,52 +77,46 @@ local TURRET_CONFIGS = {
 		cost = 75,
 		baseColor = Color3.fromRGB(200, 200, 100),
 		barrelColor = Color3.fromRGB(150, 150, 50),
-		baseSize = STANDARD_BASE_SIZE,
 		barrelSize = Vector3.new(0.6, 0.6, 3),
-		dualBarrel = true,  -- Visual distinction: two thin barrels
+		dualBarrel = true,
 	},
 	SlowTurret = {
 		displayName = "Heavy Turret",
 		cost = 30,
 		baseColor = Color3.fromRGB(80, 80, 80),
 		barrelColor = Color3.fromRGB(40, 40, 40),
-		baseSize = STANDARD_BASE_SIZE,
-		barrelSize = Vector3.new(1.5, 1.5, 4),  -- Thicker barrel for visual distinction
+		barrelSize = Vector3.new(1.5, 1.5, 4),
 	},
 	FrostTurret = {
 		displayName = "Frost Turret",
 		cost = 100,
 		baseColor = Color3.fromRGB(150, 200, 255),
 		barrelColor = Color3.fromRGB(100, 180, 255),
-		baseSize = STANDARD_BASE_SIZE,
 		barrelSize = STANDARD_BARREL_SIZE,
-		glowColor = Color3.fromRGB(150, 220, 255),  -- Blue glow for visual distinction
+		glowColor = Color3.fromRGB(150, 220, 255),
 	},
 	PoisonTurret = {
 		displayName = "Poison Turret",
 		cost = 90,
 		baseColor = Color3.fromRGB(80, 150, 80),
 		barrelColor = Color3.fromRGB(50, 200, 50),
-		baseSize = STANDARD_BASE_SIZE,
 		barrelSize = STANDARD_BARREL_SIZE,
-		glowColor = Color3.fromRGB(100, 255, 100),  -- Green glow for visual distinction
+		glowColor = Color3.fromRGB(100, 255, 100),
 	},
 	MultiShotTurret = {
 		displayName = "Multi-Shot Turret",
 		cost = 120,
 		baseColor = Color3.fromRGB(150, 100, 50),
 		barrelColor = Color3.fromRGB(100, 70, 30),
-		baseSize = STANDARD_BASE_SIZE,
 		barrelSize = Vector3.new(0.7, 0.7, 3),
-		tripleBarrel = true,  -- Visual distinction: three barrels
+		tripleBarrel = true,
 	},
 	CannonTurret = {
 		displayName = "Cannon Turret",
 		cost = 150,
 		baseColor = Color3.fromRGB(60, 60, 70),
 		barrelColor = Color3.fromRGB(40, 40, 50),
-		baseSize = STANDARD_BASE_SIZE,
-		barrelSize = Vector3.new(1.8, 1.8, 3.5),  -- Fat barrel for visual distinction
+		barrelSize = Vector3.new(1.8, 1.8, 3.5),
 	},
 }
 
@@ -131,39 +124,25 @@ local function createTurret(name, config)
 	local turret = Instance.new("Model")
 	turret.Name = name
 
-	-- Use an invisible anchor part at ground level as PrimaryPart
-	-- This ensures consistent placement - the anchor's center is at Y=0
-	local anchor = Instance.new("Part")
-	anchor.Name = "Anchor"
-	anchor.Size = Vector3.new(config.baseSize.X, 0.1, config.baseSize.Z)
-	anchor.CFrame = CFrame.new(0, 0.05, 0)  -- Tiny part at ground level
-	anchor.Transparency = 1
-	anchor.CanCollide = false
-	anchor.Anchored = true
-	anchor.Parent = turret
+	local baseHeight = TURRET_BASE_SIZE.Y
+	local headHeight = TURRET_HEAD_HEIGHT
 
-	-- Base platform - sits on ground
+	-- Base platform (center at Y = baseHeight/2, so bottom at Y=0)
 	local base = Instance.new("Part")
 	base.Name = "Base"
-	base.Size = config.baseSize
-	base.CFrame = CFrame.new(0, config.baseSize.Y / 2, 0)  -- Bottom at Y=0
+	base.Size = TURRET_BASE_SIZE
+	base.CFrame = CFrame.new(0, baseHeight / 2, 0)
 	base.Color = config.baseColor
 	base.Material = Enum.Material.Metal
 	base.Anchored = true
 	base.CanCollide = true
 	base.Parent = turret
 
-	local baseWeld = Instance.new("WeldConstraint")
-	baseWeld.Part0 = anchor
-	baseWeld.Part1 = base
-	baseWeld.Parent = base
-
-	-- Turret head (rotates)
-	local headHeight = config.baseSize.Y * 0.5
+	-- Turret head on top of base
 	local head = Instance.new("Part")
 	head.Name = "Head"
-	head.Size = Vector3.new(config.baseSize.X * STANDARD_HEAD_SCALE, headHeight, config.baseSize.Z * STANDARD_HEAD_SCALE)
-	head.CFrame = CFrame.new(0, config.baseSize.Y + headHeight / 2, 0)
+	head.Size = Vector3.new(TURRET_BASE_SIZE.X * 0.7, headHeight, TURRET_BASE_SIZE.Z * 0.7)
+	head.CFrame = CFrame.new(0, baseHeight + headHeight / 2, 0)
 	head.Color = config.baseColor
 	head.Material = Enum.Material.Metal
 	head.Anchored = true
@@ -175,12 +154,13 @@ local function createTurret(name, config)
 	headWeld.Part1 = head
 	headWeld.Parent = head
 
-	-- Barrel(s)
+	-- Barrel(s) - positioned at head height
+	local barrelY = baseHeight + headHeight / 2
 	local function createBarrel(xOffset)
 		local barrel = Instance.new("Part")
 		barrel.Name = "Barrel"
 		barrel.Size = config.barrelSize
-		barrel.CFrame = CFrame.new(xOffset, config.baseSize.Y + headHeight / 2, -config.barrelSize.Z / 2 - head.Size.Z / 4)
+		barrel.CFrame = CFrame.new(xOffset, barrelY, -config.barrelSize.Z / 2 - head.Size.Z / 4)
 		barrel.Color = config.barrelColor
 		barrel.Material = Enum.Material.Metal
 		barrel.Anchored = true
@@ -215,8 +195,8 @@ local function createTurret(name, config)
 		glow.Parent = head
 	end
 
-	-- PrimaryPart is the anchor at ground level for consistent placement
-	turret.PrimaryPart = anchor
+	-- PrimaryPart is Base (center at Y = baseHeight/2)
+	turret.PrimaryPart = base
 	addCost(turret, config.cost)
 	addDisplayName(turret, config.displayName)
 
@@ -225,13 +205,15 @@ end
 
 --==========================================
 -- DEFENSE TEMPLATES
+-- Walls are SHORT (4 studs) so turrets (5+ studs) can shoot OVER them
 --==========================================
 
 local function createBarricade()
+	-- Short wooden pillar for maze building - players can kite around these
 	local barricade = Instance.new("Part")
 	barricade.Name = "Barricade"
-	barricade.Size = Vector3.new(4.5, 9, 4.5)
-	barricade.CFrame = CFrame.new(0, 4.5, 0)
+	barricade.Size = Vector3.new(4, 4, 4)  -- Short cube, 4 studs tall
+	barricade.CFrame = CFrame.new(0, 2, 0)  -- Center at Y=2, bottom at Y=0
 	barricade.Material = Enum.Material.Wood
 	barricade.BrickColor = BrickColor.new("Brown")
 	barricade.Anchored = true
@@ -244,10 +226,11 @@ local function createBarricade()
 end
 
 local function createWall()
+	-- Low concrete wall - turrets shoot over it
 	local wall = Instance.new("Part")
 	wall.Name = "Wall"
-	wall.Size = Vector3.new(10, 8, 2)
-	wall.CFrame = CFrame.new(0, 4, 0)
+	wall.Size = Vector3.new(10, 4, 2)  -- 4 studs tall, wide
+	wall.CFrame = CFrame.new(0, 2, 0)  -- Center at Y=2, bottom at Y=0
 	wall.Material = Enum.Material.Concrete
 	wall.BrickColor = BrickColor.new("Medium stone grey")
 	wall.Anchored = true
@@ -260,40 +243,58 @@ local function createWall()
 end
 
 local function createStrongWall()
-	local wall = Instance.new("Part")
-	wall.Name = "StrongWall"
-	wall.Size = Vector3.new(12, 10, 3)
-	wall.CFrame = CFrame.new(0, 5, 0)
-	wall.Material = Enum.Material.Concrete
-	wall.BrickColor = BrickColor.new("Dark stone grey")
-	wall.Anchored = true
-	wall.CanCollide = true
-
-	-- Add reinforcement stripes
+	-- Bunker-style fortification: thick base with sandbags and metal plating
 	local model = Instance.new("Model")
 	model.Name = "StrongWall"
-	wall.Parent = model
 
+	-- Thick concrete base
+	local base = Instance.new("Part")
+	base.Name = "Base"
+	base.Size = Vector3.new(10, 3, 4)  -- Wider/thicker than regular wall
+	base.CFrame = CFrame.new(0, 1.5, 0)  -- Center at Y=1.5, bottom at Y=0
+	base.Material = Enum.Material.Concrete
+	base.BrickColor = BrickColor.new("Dark stone grey")
+	base.Anchored = true
+	base.CanCollide = true
+	base.Parent = model
+
+	-- Top plate (angled for deflection look)
+	local topPlate = Instance.new("Part")
+	topPlate.Name = "TopPlate"
+	topPlate.Size = Vector3.new(10, 1.5, 4.5)
+	topPlate.CFrame = CFrame.new(0, 3.75, 0)  -- On top of base
+	topPlate.Material = Enum.Material.DiamondPlate
+	topPlate.Color = Color3.fromRGB(70, 70, 80)
+	topPlate.Anchored = true
+	topPlate.CanCollide = true
+	topPlate.Parent = model
+
+	local topWeld = Instance.new("WeldConstraint")
+	topWeld.Part0 = base
+	topWeld.Part1 = topPlate
+	topWeld.Parent = topPlate
+
+	-- Corner reinforcements
 	for i = -1, 1, 2 do
-		local stripe = Instance.new("Part")
-		stripe.Name = "Reinforcement"
-		stripe.Size = Vector3.new(0.5, 10, 3.2)
-		stripe.CFrame = CFrame.new(i * 4, 5, 0)
-		stripe.Material = Enum.Material.DiamondPlate
-		stripe.Color = Color3.fromRGB(60, 60, 60)
-		stripe.Anchored = true
-		stripe.CanCollide = false
-		stripe.Parent = model
+		local corner = Instance.new("Part")
+		corner.Name = "Corner"
+		corner.Size = Vector3.new(1, 4.5, 4.5)
+		corner.CFrame = CFrame.new(i * 4.5, 2.25, 0)
+		corner.Material = Enum.Material.DiamondPlate
+		corner.Color = Color3.fromRGB(50, 50, 60)
+		corner.Anchored = true
+		corner.CanCollide = false
+		corner.Parent = model
 
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = wall
-		weld.Part1 = stripe
-		weld.Parent = stripe
+		local cornerWeld = Instance.new("WeldConstraint")
+		cornerWeld.Part0 = base
+		cornerWeld.Part1 = corner
+		cornerWeld.Parent = corner
 	end
 
-	model.PrimaryPart = wall
+	model.PrimaryPart = base
 	addCost(model, 120)
-	addDisplayName(model, "Strong Wall")
+	addDisplayName(model, "Bunker Wall")
 
 	return model
 end
