@@ -889,22 +889,107 @@ local function hidePlacementRangeIndicator()
 	end
 end
 
--- Helper: Create a fallback simple preview (colored box)
-local function createSimplePreview(itemData)
+-- Aura colors (must match BuildingManager)
+local AURA_COLORS = {
+	SpeedAura = Color3.fromRGB(255, 200, 50),
+	DamageAura = Color3.fromRGB(255, 80, 80),
+	FortifyAura = Color3.fromRGB(100, 200, 255),
+	RangeAura = Color3.fromRGB(150, 255, 150),
+	RegenAura = Color3.fromRGB(100, 255, 200),
+}
+
+-- Helper: Create accurate dynamic preview (matches BuildingManager templates)
+local function createDynamicPreview(itemData)
+	local itemName = itemData.name
 	local preview = Instance.new("Model")
 	preview.Name = "PreviewModel"
 
-	local base = Instance.new("Part")
-	base.Name = "Base"
-	base.Size = itemData.size
-	base.Anchored = true
-	base.CanCollide = false
-	base.Material = Enum.Material.SmoothPlastic
-	base.Transparency = 0.4
-	base.Parent = preview
+	if itemName == "Barricade" then
+		-- Barricade: 4.5x9x4.5 wood pillar
+		local pillar = Instance.new("Part")
+		pillar.Name = "Base"
+		pillar.Size = Vector3.new(4.5, 9, 4.5)
+		pillar.Material = Enum.Material.Wood
+		pillar.BrickColor = BrickColor.new("Brown")
+		pillar.Anchored = true
+		pillar.CanCollide = false
+		pillar.Parent = preview
+		preview.PrimaryPart = pillar
 
-	preview.PrimaryPart = base
+	elseif itemName == "Wall" then
+		-- Wall: 10x8x2 concrete barrier
+		local wall = Instance.new("Part")
+		wall.Name = "Base"
+		wall.Size = Vector3.new(10, 8, 2)
+		wall.Material = Enum.Material.Concrete
+		wall.BrickColor = BrickColor.new("Medium stone grey")
+		wall.Anchored = true
+		wall.CanCollide = false
+		wall.Parent = preview
+		preview.PrimaryPart = wall
+
+	elseif itemName == "StrongWall" then
+		-- StrongWall: 12x10x3 reinforced concrete
+		local wall = Instance.new("Part")
+		wall.Name = "Base"
+		wall.Size = Vector3.new(12, 10, 3)
+		wall.Material = Enum.Material.Concrete
+		wall.BrickColor = BrickColor.new("Dark stone grey")
+		wall.Anchored = true
+		wall.CanCollide = false
+		wall.Parent = preview
+		preview.PrimaryPart = wall
+
+	elseif itemName:find("Aura") then
+		-- Aura: Base pillar (4x6x4) + Crystal on top (2x3x2)
+		local auraColor = AURA_COLORS[itemName] or Color3.new(1, 1, 1)
+
+		local base = Instance.new("Part")
+		base.Name = "Base"
+		base.Size = Vector3.new(4, 6, 4)
+		base.CFrame = CFrame.new(0, 0, 0)
+		base.Material = Enum.Material.SmoothPlastic
+		base.Color = auraColor
+		base.Anchored = true
+		base.CanCollide = false
+		base.Parent = preview
+
+		local crystal = Instance.new("Part")
+		crystal.Name = "Crystal"
+		crystal.Size = Vector3.new(2, 3, 2)
+		crystal.CFrame = CFrame.new(0, 4.5, 0)  -- On top of base
+		crystal.Material = Enum.Material.Neon
+		crystal.Color = auraColor
+		crystal.Anchored = true
+		crystal.CanCollide = false
+		crystal.Parent = preview
+
+		-- Weld crystal to base for movement
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = base
+		weld.Part1 = crystal
+		weld.Parent = crystal
+
+		preview.PrimaryPart = base
+
+	else
+		-- Generic fallback box
+		local box = Instance.new("Part")
+		box.Name = "Base"
+		box.Size = itemData.size
+		box.Anchored = true
+		box.CanCollide = false
+		box.Material = Enum.Material.SmoothPlastic
+		box.Parent = preview
+		preview.PrimaryPart = box
+	end
+
 	return preview
+end
+
+-- Helper: Create a fallback simple preview (colored box) - kept for compatibility
+local function createSimplePreview(itemData)
+	return createDynamicPreview(itemData)
 end
 
 -- Helper: Update preview highlight color
@@ -927,6 +1012,18 @@ local function setPreviewValid(preview, isValid)
 	end
 end
 
+-- Items that are dynamically created on the server (use dynamic preview instead of model lookup)
+local DYNAMIC_ITEMS = {
+	Barricade = true,
+	Wall = true,
+	StrongWall = true,
+	SpeedAura = true,
+	DamageAura = true,
+	FortifyAura = true,
+	RangeAura = true,
+	RegenAura = true,
+}
+
 -- Helper: Create preview based on item type (uses actual model if available)
 local function createPreview(itemData)
 	if previewModel then
@@ -935,39 +1032,57 @@ local function createPreview(itemData)
 
 	local preview = nil
 	local usedActualModel = false
+	local usedDynamicPreview = false
 
-	-- Try to use actual model from ReplicatedStorage
-	local actualModel = findBuildableModel(itemData.name)
-	if actualModel then
-		preview = actualModel:Clone()
-		preview.Name = "PreviewModel"
-		usedActualModel = true
+	-- For dynamic items, create accurate preview (matches server template)
+	if DYNAMIC_ITEMS[itemData.name] then
+		preview = createDynamicPreview(itemData)
+		usedDynamicPreview = true
 
-		-- Make all parts semi-transparent and non-collidable
+		-- Apply transparency to all parts
 		for _, part in ipairs(preview:GetDescendants()) do
 			if part:IsA("BasePart") then
-				part.Anchored = true
-				part.CanCollide = false
 				part.Transparency = math.max(part.Transparency, 0.3)
 				part.CastShadow = false
-			elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") then
-				part:Destroy()
 			end
 		end
-
-		-- Also handle if model is a single BasePart
-		if preview:IsA("BasePart") then
-			preview.Anchored = true
-			preview.CanCollide = false
-			preview.Transparency = math.max(preview.Transparency, 0.3)
+		if preview.PrimaryPart then
+			preview.PrimaryPart.Transparency = math.max(preview.PrimaryPart.Transparency, 0.3)
 		end
+	else
+		-- Try to use actual model from ReplicatedStorage
+		local actualModel = findBuildableModel(itemData.name)
+		if actualModel then
+			preview = actualModel:Clone()
+			preview.Name = "PreviewModel"
+			usedActualModel = true
 
-		-- Ensure PrimaryPart is set
-		if preview:IsA("Model") and not preview.PrimaryPart then
-			local primaryPart = preview:FindFirstChild("HumanoidRootPart")
-				or preview:FindFirstChildWhichIsA("BasePart")
-			if primaryPart then
-				preview.PrimaryPart = primaryPart
+			-- Make all parts semi-transparent and non-collidable
+			for _, part in ipairs(preview:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Anchored = true
+					part.CanCollide = false
+					part.Transparency = math.max(part.Transparency, 0.3)
+					part.CastShadow = false
+				elseif part:IsA("ParticleEmitter") or part:IsA("Fire") or part:IsA("Smoke") or part:IsA("Sparkles") then
+					part:Destroy()
+				end
+			end
+
+			-- Also handle if model is a single BasePart
+			if preview:IsA("BasePart") then
+				preview.Anchored = true
+				preview.CanCollide = false
+				preview.Transparency = math.max(preview.Transparency, 0.3)
+			end
+
+			-- Ensure PrimaryPart is set
+			if preview:IsA("Model") and not preview.PrimaryPart then
+				local primaryPart = preview:FindFirstChild("HumanoidRootPart")
+					or preview:FindFirstChildWhichIsA("BasePart")
+				if primaryPart then
+					preview.PrimaryPart = primaryPart
+				end
 			end
 		end
 	end
@@ -975,9 +1090,10 @@ local function createPreview(itemData)
 	-- Fallback to simple preview if model not found or invalid
 	if not preview or (preview:IsA("Model") and not preview.PrimaryPart) then
 		if preview then preview:Destroy() end
-		preview = createSimplePreview(itemData)
+		preview = createDynamicPreview(itemData)
 		usedActualModel = false
-		print("PlacementSystem: Using simple preview for", itemData.displayName, "(model not found or invalid)")
+		usedDynamicPreview = true
+		print("PlacementSystem: Using dynamic preview for", itemData.displayName)
 	end
 
 	-- Add Highlight for valid/invalid indication
@@ -1012,6 +1128,8 @@ local function createPreview(itemData)
 
 	if usedActualModel then
 		print("PlacementSystem: Created preview from actual model for", itemData.displayName)
+	elseif usedDynamicPreview then
+		print("PlacementSystem: Created dynamic preview for", itemData.displayName)
 	else
 		print("PlacementSystem: Created preview for", itemData.displayName)
 	end
