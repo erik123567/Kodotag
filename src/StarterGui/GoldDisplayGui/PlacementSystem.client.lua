@@ -85,8 +85,9 @@ local FALLBACK_SIZES = {
 	MultiShotTurret = Vector3.new(4, 6, 2),  -- Actual: 4 x 6 x 2
 	CannonTurret = Vector3.new(4, 6, 2),     -- Actual: 4 x 6 x 2
 	-- Defense (dynamic templates)
-	Barricade = Vector3.new(3, 6, 3),        -- Maze pillar - 2 stud gaps on 5 stud grid
+	Barricade = Vector3.new(4.5, 9, 4.5),    -- Maze pillar - larger for better mazing
 	Wall = Vector3.new(10, 8, 2),            -- Wide barrier, taller than Kodo
+	StrongWall = Vector3.new(12, 10, 3),     -- Extra fortified wall
 	-- Economy
 	Farm = Vector3.new(7, 5, 10),            -- Actual: 7.3 x 5.2 x 9.9
 	Workshop = Vector3.new(8, 8, 8),         -- Landmark building (actual model is tiny, needs fixing)
@@ -210,11 +211,11 @@ local BUILDABLE_ITEMS = {
 		displayName = "Barricade",
 		cost = 15,
 		buildTime = 1,
-		size = Vector3.new(3, 6, 3),
+		size = Vector3.new(4.5, 9, 4.5),
 		category = "Maze",
 		stats = {
 			health = 100,
-			description = "Maze pillar. Players can squeeze through gaps but Kodos can't. Spam these to build mazes!"
+			description = "Large maze pillar. Build mazes to funnel Kodos into turret fire!"
 		}
 	},
 	{
@@ -227,6 +228,18 @@ local BUILDABLE_ITEMS = {
 		stats = {
 			health = 500,
 			description = "Heavy defensive wall for protecting your base. Place behind turrets to create strongholds."
+		}
+	},
+	{
+		name = "StrongWall",
+		displayName = "Strong Wall",
+		cost = 120,
+		buildTime = 5,
+		size = Vector3.new(12, 10, 3),  -- Will be overridden by actual model size
+		category = "Defense",
+		stats = {
+			health = 1000,
+			description = "Extra fortified wall. Extremely durable for holding critical chokepoints."
 		}
 	},
 	{

@@ -815,7 +815,9 @@ local function startRound()
 	spawnKodoWave()
 
 	-- Round loop
-	local lastWaveTime = 0
+	local waveCleared = false
+	local timeSinceWaveCleared = 0
+	local WAVE_CLEAR_DELAY = 5 -- Seconds between waves after clearing
 
 	while gameActive do
 		wait(1)
@@ -867,11 +869,22 @@ local function startRound()
 			RoundManager.broadcastPlayerStats()
 		end
 
-		-- Spawn new waves
-		if roundTime - lastWaveTime >= WAVE_INTERVAL then
-			currentWave = currentWave + 1
-			spawnKodoWave()
-			lastWaveTime = roundTime
+		-- Check if wave is cleared (all Kodos dead)
+		if #activeKodos == 0 and not waveCleared then
+			waveCleared = true
+			timeSinceWaveCleared = 0
+			showNotification:FireAllClients("Wave " .. currentWave .. " cleared!", Color3.new(0, 1, 0))
+			print("RoundManager: Wave " .. currentWave .. " cleared! Starting next wave in " .. WAVE_CLEAR_DELAY .. " seconds...")
+		end
+
+		-- Spawn next wave after delay when current wave is cleared
+		if waveCleared then
+			timeSinceWaveCleared = timeSinceWaveCleared + 1
+			if timeSinceWaveCleared >= WAVE_CLEAR_DELAY then
+				currentWave = currentWave + 1
+				waveCleared = false
+				spawnKodoWave()
+			end
 		end
 
 		RoundManager.broadcastGameState()

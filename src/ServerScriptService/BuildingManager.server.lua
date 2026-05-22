@@ -27,6 +27,7 @@ local BUILD_TIMES = {
 	CannonTurret = 8,
 	Barricade = 1,  -- Fast maze building
 	Wall = 4,       -- Heavy defensive wall
+	StrongWall = 5, -- Extra fortified wall
 	Farm = 5,
 	Workshop = 10,
 	-- Aura buildings
@@ -294,6 +295,7 @@ local function getBaseHealth(categoryName, itemName)
 	local itemHealth = {
 		Barricade = 100,  -- Maze pillar
 		Wall = 500,       -- Heavy defensive wall
+		StrongWall = 1000, -- Extra fortified wall
 		SpeedAura = 100,
 		DamageAura = 100,
 		FortifyAura = 150,
@@ -683,10 +685,10 @@ placeItemEvent.OnServerEvent:Connect(function(player, itemName, position, rotati
 	if not template then
 		if itemName == "Barricade" then
 			-- Create Barricade template dynamically (pillar for maze building)
-			-- 3x6x3 size creates 2-stud gaps on 5-stud grid - players squeeze through, Kodos can't
+			-- 4.5x9x4.5 size for better mazing - taller and wider pillars
 			template = Instance.new("Part")
 			template.Name = "Barricade"
-			template.Size = Vector3.new(3, 6, 3)
+			template.Size = Vector3.new(4.5, 9, 4.5)
 			template.Material = Enum.Material.Wood
 			template.BrickColor = BrickColor.new("Brown")
 			template.Anchored = true
